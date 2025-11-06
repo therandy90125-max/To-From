@@ -1,0 +1,23 @@
+# ToAndFrom Portfolio Optimization - Python Dependencies
+
+# Quantum Computing
+qiskit>=0.45.0
+qiskit-algorithms>=0.2.0
+qiskit-finance>=0.4.0
+qiskit-optimization>=0.6.0
+
+# Data & Analysis
+yfinance>=0.2.28
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Web Framework
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Utilities
+python-dateutil>=2.8.2
+

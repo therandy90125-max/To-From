@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToAndFrom Portfolio Optimizer - 테스트</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+        
+        .result h3 {
+            margin-bottom: 15px;
+        }
+        
+        .result pre {
+            background: rgba(0,0,0,0.05);
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+            color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 ToAndFrom Portfolio Optimizer</h1>
+        <p class="subtitle">포트폴리오 최적화 API 테스트</p>
+        
+        <div class="info-box">
+            <p><strong>사용 방법:</strong></p>
+            <p>1. 주식 티커를 쉼표로 구분하여 입력 (예: AAPL, GOOGL, MSFT)</p>
+            <p>2. 리스크 팩터와 최적화 방법 선택</p>
+            <p>3. "최적화 실행" 버튼 클릭</p>
+        </div>
+        
+        <form id="optimizeForm">
+            <div class="form-group">
+                <label for="tickers">주식 티커 (쉼표로 구분):</label>
+                <input 
+                    type="text" 
+                    id="tickers" 
+                    placeholder="예: AAPL, GOOGL, MSFT, AMZN, TSLA"
+                    value="AAPL, GOOGL, MSFT"
+                    required
+                >
+            </div>
+            
+            <div class="form-group">
+                <label for="riskFactor">리스크 팩터 (0.0 ~ 1.0):</label>
+                <input 
+                    type="number" 
+                    id="riskFactor" 
+                    min="0" 
+                    max="1" 
+                    step="0.1" 
+                    value="0.5"
+                    required
+                >
+                <small style="color: #666;">낮을수록 공격적, 높을수록 보수적</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="method">최적화 방법:</label>
+                <select id="method" required>
+                    <option value="classical">고전적 최적화 (빠름)</option>
+                    <option value="quantum">양자 최적화 (QAOA, 느림)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="period">데이터 기간:</label>
+                <select id="period">
+                    <option value="1y" selected>1년</option>
+                    <option value="6mo">6개월</option>
+                    <option value="3mo">3개월</option>
+                    <option value="1mo">1개월</option>
+                </select>
+            </div>
+            
+            <div class="button-group">
+                <button type="submit" class="btn-primary">최적화 실행</button>
+                <button type="button" class="btn-secondary" onclick="testHealth()">서버 상태 확인</button>
+            </div>
+        </form>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px;">최적화 중... 잠시만 기다려주세요.</p>
+        </div>
+        
+        <div class="result" id="result"></div>
+    </div>
+    
+    <script>
+        document.getElementById('optimizeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const tickers = document.getElementById('tickers').value
+                .split(',')
+                .map(t => t.trim())
+                .filter(t => t.length > 0);
+            
+            const riskFactor = parseFloat(document.getElementById('riskFactor').value);
+            const method = document.getElementById('method').value;
+            const period = document.getElementById('period').value;
+            
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+            
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/optimize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tickers: tickers,
+                        risk_factor: riskFactor,
+                        method: method,
+                        period: period
+                    })
+                });
+                
+                const data = await response.json();
+                
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                
+                if (data.success) {
+                    result.className = 'result success';
+                    result.innerHTML = `
+                        <h3>✅ 최적화 성공!</h3>
+                        <pre>${JSON.stringify(data.result, null, 2)}</pre>
+                        <div style="margin-top: 15px;">
+                            <p><strong>선택된 주식:</strong> ${data.result.selected_tickers.join(', ')}</p>
+                            <p><strong>예상 수익률:</strong> ${(data.result.expected_return * 100).toFixed(2)}%</p>
+                            <p><strong>리스크:</strong> ${(data.result.risk * 100).toFixed(2)}%</p>
+                            <p><strong>샤프 비율:</strong> ${data.result.sharpe_ratio.toFixed(2)}</p>
+                        </div>
+                    `;
+                } else {
+                    result.className = 'result error';
+                    result.innerHTML = `
+                        <h3>❌ 오류 발생</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                result.className = 'result error';
+                result.innerHTML = `
+                    <h3>❌ 네트워크 오류</h3>
+                    <pre>${error.message}</pre>
+                    <p style="margin-top: 10px;">서버가 실행 중인지 확인하세요: <code>http://localhost:5000</code></p>
+                `;
+            }
+        });
+        
+        async function testHealth() {
+            const result = document.getElementById('result');
+            const loading = document.getElementById('loading');
+            
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/health');
+                const data = await response.json();
+                
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                result.className = 'result success';
+                result.innerHTML = `
+                    <h3>✅ 서버 상태</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                result.className = 'result error';
+                result.innerHTML = `
+                    <h3>❌ 서버 연결 실패</h3>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
+
