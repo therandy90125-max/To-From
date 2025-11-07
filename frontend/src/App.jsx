@@ -5,6 +5,8 @@ import Dashboard from './components/Dashboard';
 import Chatbot from './components/Chatbot';
 import PortfolioOptimizer from './components/PortfolioOptimizer';
 import Settings from './components/Settings';
+import VisualizationHub from './components/VisualizationHub';
+import EnhancedCharts from './components/EnhancedCharts';
 import './App.css';
 import './styles/About.css';
 
@@ -20,6 +22,10 @@ function AppContent() {
         return <Chatbot />;
       case 'optimizer':
         return <PortfolioOptimizer />;
+      case 'workflow':
+        return <VisualizationHub />;
+      case 'charts':
+        return <EnhancedCharts />;
       case 'settings':
         return <Settings />;
       case 'about':
