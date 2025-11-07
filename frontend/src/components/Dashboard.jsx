@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from "../contexts/LanguageContext";
 
 const Dashboard = () => {
+  const { t } = useLanguage();
+  
   // States
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -9,19 +12,19 @@ const Dashboard = () => {
     { 
       ticker: 'AAPL', 
       name: 'Apple Inc.', 
-      market: '해외',
+      market: t('foreign'),
       price: '250,000',
       shares: 10 
     },
     { 
       ticker: '005930.KS', 
       name: 'Samsung Electronics', 
-      market: '국내',
+      market: t('domestic'),
       price: '75,000',
       shares: 0 
     }
   ]);
-  const [investmentAmount, setInvestmentAmount] = useState('자동 계산');
+  const [investmentAmount, setInvestmentAmount] = useState(t('autoCalculate'));
   const [riskLevel, setRiskLevel] = useState(5);
   const [optimizationMethod, setOptimizationMethod] = useState('QAOA');
   const [period, setPeriod] = useState('1y');
@@ -44,12 +47,17 @@ const Dashboard = () => {
 
   const searchStocks = async (query) => {
     try {
+      console.log('Searching for:', query);
       const response = await fetch(`http://localhost:8080/api/stocks/search?q=${query}`);
       const data = await response.json();
+      console.log('API Response:', data);
+      
       if (data.success && data.results) {
+        console.log('Found results:', data.results.length);
         setSearchResults(data.results);
         setShowDropdown(data.results.length > 0);
       } else {
+        console.log('No results or failed');
         setSearchResults([]);
         setShowDropdown(false);
       }
@@ -66,8 +74,8 @@ const Dashboard = () => {
       setStocks([...stocks, {
         ticker: result.ticker,
         name: result.name,
-        market: result.exchange.includes('KS') || result.exchange.includes('KRX') ? '국내' : '해외',
-        price: '가격 조회 중...',
+        market: result.exchange.includes('KS') || result.exchange.includes('KRX') ? t('domestic') : t('foreign'),
+        price: t('priceChecking'),
         shares: 0
       }]);
     }
@@ -91,7 +99,7 @@ const Dashboard = () => {
     const validStocks = stocks.filter(s => s.ticker && s.ticker.trim() !== '');
     
     if (validStocks.length < 2) {
-      alert('최소 2개 이상의 유효한 주식을 선택해주세요.');
+      alert(t('minimumTwoStocks'));
       return;
     }
 
@@ -129,13 +137,13 @@ const Dashboard = () => {
       
       if (data.success) {
         setResults(data.result.optimized);
-        alert('✅ 최적화 성공!');
+        alert(t('optimizationSuccess'));
       } else {
-        alert('최적화 실패: ' + (data.error || '알 수 없는 오류'));
+        alert(t('optimizationFailedMsg') + ': ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Optimization error:', error);
-      alert('최적화 실패: ' + error.message + '\n\n콘솔을 확인하세요 (F12).');
+      alert(t('optimizationFailedMsg') + ': ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -149,7 +157,7 @@ const Dashboard = () => {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">🔍</span>
-            <h2 className="text-xl font-bold text-gray-800">주식 검색</h2>
+            <h2 className="text-xl font-bold text-gray-800">{t('stockSearch')}</h2>
           </div>
           
           <div className="relative">
@@ -157,7 +165,7 @@ const Dashboard = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="종목명 또는 코드를 입력하세요 (예: 삼성전자, AAPL)"
+              placeholder={t('searchStockPlaceholder')}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
             
@@ -184,17 +192,17 @@ const Dashboard = () => {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">📊</span>
-            <h2 className="text-xl font-bold text-gray-800">주식 입력</h2>
+            <h2 className="text-xl font-bold text-gray-800">{t('stockInput')}</h2>
           </div>
           
           {/* Table Header */}
           <div className="grid grid-cols-6 gap-4 mb-3 pb-2 border-b-2 border-gray-200 font-semibold text-gray-700 text-sm">
-            <div>종목 코드</div>
-            <div>종목명</div>
-            <div>시장</div>
-            <div>현재 가격 (원)</div>
-            <div>보유 수량 (주)</div>
-            <div>삭제</div>
+            <div>{t('tickerCode')}</div>
+            <div>{t('stockName')}</div>
+            <div>{t('market')}</div>
+            <div>{t('currentPrice')}</div>
+            <div>{t('holdingShares')}</div>
+            <div>{t('delete')}</div>
           </div>
           
           {/* Stock Rows */}
@@ -219,8 +227,8 @@ const Dashboard = () => {
                 }}
                 className="p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
               >
-                <option>해외</option>
-                <option>국내</option>
+                <option>{t('foreign')}</option>
+                <option>{t('domestic')}</option>
               </select>
               <input 
                 value={stock.price} 
@@ -232,22 +240,22 @@ const Dashboard = () => {
                 min="0"
                 value={stock.shares}
                 onChange={(e) => updateShares(idx, e.target.value)}
-                placeholder="예: 10"
+                placeholder={t('sharesPlaceholder')}
                 className="p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
               />
               <button
                 onClick={() => removeStock(idx)}
                 className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition text-sm"
               >
-                삭제
+                {t('delete')}
               </button>
             </div>
           ))}
           
           {stocks.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              <p className="text-lg mb-2">📊 주식을 검색하여 추가해주세요</p>
-              <p className="text-sm">위의 검색창에서 종목을 찾아 추가할 수 있습니다</p>
+              <p className="text-lg mb-2">{t('searchToAddStocks')}</p>
+              <p className="text-sm">{t('searchInBoxAbove')}</p>
             </div>
           )}
         </div>
@@ -259,13 +267,13 @@ const Dashboard = () => {
             {/* Investment Amount */}
             <div>
               <label className="block mb-2 font-semibold text-gray-700">
-                투자 금액 (원)
+                {t('investmentAmountWon')}
               </label>
               <input
                 type="text"
                 value={investmentAmount}
                 onChange={(e) => setInvestmentAmount(e.target.value)}
-                placeholder="자동 계산"
+                placeholder={t('autoCalculate')}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -273,7 +281,7 @@ const Dashboard = () => {
             {/* Risk Level */}
             <div>
               <label className="block mb-2 font-semibold text-gray-700">
-                위험도 (1-10)
+                {t('riskLevel1to10')}
               </label>
               <input
                 type="number"
@@ -288,34 +296,34 @@ const Dashboard = () => {
             {/* Optimization Method */}
             <div>
               <label className="block mb-2 font-semibold text-gray-700">
-                최적화 방법
+                {t('optimizationMethodLabel')}
               </label>
               <select 
                 value={optimizationMethod}
                 onChange={(e) => setOptimizationMethod(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="QAOA">QAOA (Quantum Approximate Optimization)</option>
-                <option value="QMVS">QMVS (Quantum Minimum Variance Selection)</option>
+                <option value="QAOA">{t('qaoaMethod')}</option>
+                <option value="QMVS">{t('qmvsMethod')}</option>
               </select>
             </div>
 
             {/* Period */}
             <div>
               <label className="block mb-2 font-semibold text-gray-700">
-                데이터 기간
+                {t('dataPeriodLabel')}
               </label>
               <select 
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="1mo">1개월</option>
-                <option value="3mo">3개월</option>
-                <option value="6mo">6개월</option>
-                <option value="1y">1년</option>
-                <option value="2y">2년</option>
-                <option value="5y">5년</option>
+                <option value="1mo">{t('oneMonthPeriod')}</option>
+                <option value="3mo">{t('threeMonthsPeriod')}</option>
+                <option value="6mo">{t('sixMonthsPeriod')}</option>
+                <option value="1y">{t('oneYearPeriod')}</option>
+                <option value="2y">{t('twoYearsPeriod')}</option>
+                <option value="5y">{t('fiveYearsPeriod')}</option>
               </select>
             </div>
           </div>
@@ -330,29 +338,29 @@ const Dashboard = () => {
                 : 'bg-indigo-600 hover:bg-indigo-700'
             }`}
           >
-            {loading ? '최적화 중...' : '최적화 실행'}
+            {loading ? t('optimizing') : t('executeOptimization')}
           </button>
         </div>
 
         {/* Results Section */}
         {results && (
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">최적화 결과</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">{t('optimizationResults')}</h2>
             <div className="grid grid-cols-3 gap-4">
               <div className="p-4 bg-blue-50 rounded">
-                <p className="text-sm text-gray-600">기대 수익률</p>
+                <p className="text-sm text-gray-600">{t('expectedReturnPercent')}</p>
                 <p className="text-2xl font-bold text-blue-600">
                   {(results.expected_return * 100).toFixed(2)}%
                 </p>
               </div>
               <div className="p-4 bg-red-50 rounded">
-                <p className="text-sm text-gray-600">위험도</p>
+                <p className="text-sm text-gray-600">{t('riskPercent')}</p>
                 <p className="text-2xl font-bold text-red-600">
                   {(results.risk * 100).toFixed(2)}%
                 </p>
               </div>
               <div className="p-4 bg-green-50 rounded">
-                <p className="text-sm text-gray-600">샤프 비율</p>
+                <p className="text-sm text-gray-600">{t('sharpeRatioLabel')}</p>
                 <p className="text-2xl font-bold text-green-600">
                   {results.sharpe_ratio?.toFixed(2) || 'N/A'}
                 </p>
@@ -362,7 +370,7 @@ const Dashboard = () => {
             {/* Optimized Weights */}
             {results.weights && results.tickers && (
               <div className="mt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">최적화된 비중</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">{t('optimizedWeights')}</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {results.tickers.map((ticker, idx) => (
                     <div key={idx} className="p-3 bg-gray-50 rounded flex justify-between items-center">

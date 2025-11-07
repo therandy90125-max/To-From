@@ -157,5 +157,37 @@ public class PortfolioController {
         Map<String, Object> result = portfolioService.checkFlaskHealth();
         return ResponseEntity.ok(result);
     }
+    
+    /**
+     * 실시간 주가 조회 (Flask → yfinance)
+     */
+    @GetMapping("/stock/price/{symbol}")
+    public ResponseEntity<Map<String, Object>> getStockPrice(@PathVariable String symbol) {
+        try {
+            Map<String, Object> result = portfolioService.getStockPrice(symbol);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "success", false,
+                "error", "주가 조회 실패: " + e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * 주식 검색 (Flask → yfinance / database)
+     */
+    @GetMapping("/stock/search")
+    public ResponseEntity<Map<String, Object>> searchStocks(@RequestParam String q) {
+        try {
+            Map<String, Object> result = portfolioService.searchStocks(q);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "success", false,
+                "error", "검색 실패: " + e.getMessage()
+            ));
+        }
+    }
 }
 

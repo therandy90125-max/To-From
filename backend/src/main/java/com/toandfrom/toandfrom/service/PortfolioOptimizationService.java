@@ -95,5 +95,42 @@ public class PortfolioOptimizationService {
             return errorResponse;
         }
     }
+    
+    /**
+     * 실시간 주가 조회 (Flask → yfinance)
+     */
+    public Map<String, Object> getStockPrice(String symbol) {
+        String url = flaskApiUrl + "/api/stock/price/" + symbol;
+        
+        try {
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "주가 조회 실패: " + e.getMessage());
+            return errorResponse;
+        }
+    }
+    
+    /**
+     * 주식 검색
+     */
+    public Map<String, Object> searchStocks(String query) {
+        String url = flaskApiUrl + "/api/stocks/search?q=" + query;
+        
+        try {
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("results", response.getBody());
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "검색 실패: " + e.getMessage());
+            return errorResponse;
+        }
+    }
 }
 

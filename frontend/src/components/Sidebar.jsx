@@ -46,8 +46,9 @@ export default function Sidebar({ currentPage, onPageChange, onLanguageChange })
         <button
           className="language-toggle"
           onClick={handleLanguageChange}
+          title={language === 'ko' ? 'Switch to English' : '한국어로 전환'}
         >
-          {language === 'ko' ? '🇰🇷' : '🇺🇸'} {language === 'ko' ? 'English' : '한국어'}
+          {language === 'ko' ? '🇰🇷 KOR' : '🇺🇸 ENG'}
         </button>
       </div>
     </div>

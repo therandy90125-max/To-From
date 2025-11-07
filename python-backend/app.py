@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from optimizer import optimize_portfolio, PortfolioOptimizer
 from chatbot import chat
+from stock_data import get_stock_price
 import traceback
 import logging
 import os
@@ -427,8 +428,48 @@ def chatbot_chat():
         }), 500
 
 
+@app.route('/api/stock/price/<symbol>', methods=['GET'])
+def get_stock_price_endpoint(symbol):
+    """
+    실시간 주가 조회 API
+    
+    URL Parameter:
+        symbol: 주식 심볼 (예: 'AAPL', '005930', '005930.KS')
+    
+    Response:
+    {
+        "success": true,
+        "symbol": "005930.KS",
+        "name": "Samsung Electronics",
+        "currentPrice": 71000,
+        "change": 500,
+        "changePercent": 0.71,
+        "volume": 12345678,
+        "exchange": "KOSPI",
+        "dataSource": "yfinance"
+    }
+    """
+    try:
+        logger.info(f"실시간 주가 조회 요청: {symbol}")
+        
+        result = get_stock_price(symbol)
+        
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify(result), 404
+            
+    except Exception as e:
+        logger.error(f"주가 조회 오류: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'주가 조회 오류: {str(e)}'
+        }), 500
+
+
 @app.route('/api/stocks/search', methods=['GET'])
-def search_stocks():
+def search_stocks_advanced():
     """
     주식 검색 API (한국 + 미국)
     
