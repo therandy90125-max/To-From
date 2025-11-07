@@ -1,5 +1,21 @@
 {
-  "dependencies": {
-    "react-router-dom": "^7.9.5"
+  "name": "quantafolio-navigator",
+  "version": "1.0.0",
+  "description": "Quantum Portfolio Optimization Platform",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"Flask,Spring,React\" -c \"yellow,green,cyan\" \"npm run dev:flask\" \"npm run dev:spring\" \"npm run dev:react\"",
+    "dev:flask": "cd python-backend && python app.py",
+    "dev:spring": "cd backend && mvnw.cmd spring-boot:run",
+    "dev:react": "cd frontend && npm run dev",
+    "stop": "powershell -File stop-all.ps1",
+    "install:all": "cd frontend && npm install && cd ../python-backend && pip install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }
