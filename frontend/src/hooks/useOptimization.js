@@ -39,8 +39,17 @@ export const useOptimization = () => {
       );
 
       if (response.data.success) {
-        setResult(response.data.result);
-        return { success: true, data: response.data.result };
+        const resultData = response.data.result;
+        setResult(resultData);
+        
+        // Save to localStorage for Analytics page
+        localStorage.setItem('lastOptimizationResult', JSON.stringify({
+          result: resultData,
+          method,
+          timestamp: new Date().toISOString(),
+        }));
+        
+        return { success: true, data: resultData };
       } else {
         const errorMsg = response.data.error || '최적화에 실패했습니다.';
         setError(errorMsg);
@@ -75,6 +84,15 @@ export const useOptimization = () => {
 
       const timeout = method === 'quantum' ? 300000 : 60000;
       const autoSave = localStorage.getItem('autoSave') === 'true';
+      
+      // Save input data for comparison
+      const inputData = {
+        tickers,
+        initialWeights,
+        riskFactor,
+        method,
+        period
+      };
 
       const response = await axios.post(
         '/api/portfolio/optimize/with-weights',
@@ -93,8 +111,18 @@ export const useOptimization = () => {
       );
 
       if (response.data.success) {
-        setResult(response.data.result);
-        return { success: true, data: response.data.result };
+        const resultData = response.data.result;
+        setResult(resultData);
+        
+        // Save to localStorage for Analytics page with input data
+        localStorage.setItem('lastOptimizationResult', JSON.stringify({
+          result: resultData,
+          input: inputData,
+          method,
+          timestamp: new Date().toISOString(),
+        }));
+        
+        return { success: true, data: resultData };
       } else {
         const errorMsg = response.data.error || '최적화에 실패했습니다.';
         setError(errorMsg);
