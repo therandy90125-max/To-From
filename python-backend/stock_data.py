@@ -171,11 +171,11 @@ def fetch_real_time_price(symbol: str) -> Dict:
             'note': 'yfinance provides 15-20 minute delayed data'
         }
         
-        print(f"✓ Fetched real-time data for {symbol}: {current_price:.2f}")
+        print(f"[OK] Fetched real-time data for {symbol}: {current_price:.2f}")
         return result
         
     except Exception as e:
-        print(f"✗ Error fetching real data for {symbol}: {str(e)}")
+        print(f"[ERROR] Error fetching real data for {symbol}: {str(e)}")
         raise
 
 
@@ -239,7 +239,7 @@ def fetch_mock_price(symbol: str) -> Dict:
         'dataSource': 'mock'
     }
     
-    print(f"✓ Using mock data for {symbol}: {current_price:.2f}")
+    print(f"[MOCK] Using mock data for {symbol}: {current_price:.2f}")
     return result
 
 
