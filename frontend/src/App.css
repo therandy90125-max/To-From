@@ -620,7 +620,131 @@ body {
   word-wrap: break-word;
 }
 
+/* 주식 목록 스타일 */
+.stock-list {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.stock-list-header {
+  display: grid;
+  grid-template-columns: 100px 1fr 120px 100px 100px 100px;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f7fafc;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #4a5568;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.stock-list-item {
+  display: grid;
+  grid-template-columns: 100px 1fr 120px 100px 100px 100px;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  align-items: center;
+  transition: background 0.15s ease;
+}
+
+.stock-list-item:hover {
+  background: #f7fafc;
+}
+
+.stock-list-item:last-child {
+  border-bottom: none;
+}
+
+.stock-ticker-cell {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 0.95rem;
+}
+
+.stock-name-cell {
+  color: #2d3748;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-shares-cell,
+.stock-price-cell,
+.stock-value-cell {
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.shares-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s ease;
+}
+
+.shares-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.shares-input:disabled {
+  background: #f7fafc;
+  cursor: not-allowed;
+}
+
+.remove-button {
+  padding: 0.4rem 0.8rem;
+  background: #fff;
+  border: 1px solid #fc8181;
+  color: #c53030;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.remove-button:hover {
+  background: #fed7d7;
+  border-color: #c53030;
+}
+
+.remove-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stock-list-total {
+  display: grid;
+  grid-template-columns: 100px 1fr 120px 100px 100px 100px;
+  gap: 1rem;
+  padding: 1rem;
+  background: #edf2f7;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #2d3748;
+}
+
+.stock-actions-cell {
+  text-align: right;
+}
+
 /* 반응형 디자인 */
+@media (max-width: 1024px) {
+  .stock-list-header,
+  .stock-list-item,
+  .stock-list-total {
+    grid-template-columns: 80px 1fr 100px 80px 80px 80px;
+    font-size: 0.8rem;
+  }
+}
+
 @media (max-width: 768px) {
   .sidebar {
     width: 200px;
@@ -637,5 +761,22 @@ body {
   
   .dashboard-summary {
     grid-template-columns: 1fr;
+  }
+  
+  .stock-list-header,
+  .stock-list-item,
+  .stock-list-total {
+    grid-template-columns: 70px 1fr 80px 80px;
+    font-size: 0.75rem;
+  }
+  
+  .stock-price-cell {
+    display: none;
+  }
+  
+  .stock-actions-cell {
+    grid-column: span 4;
+    text-align: center;
+    margin-top: 0.5rem;
   }
 }

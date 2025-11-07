@@ -130,6 +130,20 @@ export const translations = {
     whatIsPortfolioOptimization: "What is portfolio optimization?",
     whatIsQuantumOptimization: "What is quantum optimization?",
     howToUseOptimizer: "How do I use the optimizer?",
+    
+    // Stock Search
+    searchStockOrTicker: "Search stock or ticker...",
+    noResultsFound: "No results found",
+    addStock: "Add Stock",
+    removeStock: "Remove",
+    ticker: "Ticker",
+    name: "Name",
+    shares: "Shares",
+    sharesPlaceholder: "0",
+    price: "Price",
+    value: "Value",
+    stockList: "Stock List",
+    total: "Total",
   },
   ko: {
     // Navigation
@@ -261,6 +275,20 @@ export const translations = {
     whatIsPortfolioOptimization: "포트폴리오 최적화란 무엇인가요?",
     whatIsQuantumOptimization: "양자 최적화란 무엇인가요?",
     howToUseOptimizer: "최적화 도구는 어떻게 사용하나요?",
+    
+    // Stock Search
+    searchStockOrTicker: "주식 또는 티커 검색...",
+    noResultsFound: "검색 결과가 없습니다",
+    addStock: "주식 추가",
+    removeStock: "제거",
+    ticker: "티커",
+    name: "이름",
+    shares: "수량",
+    sharesPlaceholder: "0",
+    price: "가격",
+    value: "가치",
+    stockList: "주식 목록",
+    total: "합계",
   }
 };
 

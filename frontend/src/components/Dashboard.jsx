@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLanguage } from "../contexts/LanguageContext";
+import StockSearchInput from "./StockSearchInput";
 import axios from "axios";
 
 export default function Dashboard({ onNavigateToOptimizer }) {
@@ -7,22 +8,60 @@ export default function Dashboard({ onNavigateToOptimizer }) {
   const [portfolioValue, setPortfolioValue] = useState(125430);
   const [portfolioReturn, setPortfolioReturn] = useState(12.34);
   const [optimizationResult, setOptimizationResult] = useState(null);
-  const [optimizerTickers, setOptimizerTickers] = useState("");
   const [targetRisk, setTargetRisk] = useState(0.15);
   const [optimizing, setOptimizing] = useState(false);
+  
+  // 주식 목록 관리
+  const [stocks, setStocks] = useState([]);
+
+  const handleAddStock = (stock) => {
+    // 이미 추가된 주식인지 확인
+    if (stocks.find(s => s.ticker === stock.ticker)) {
+      alert(`${stock.ticker}는 이미 추가되었습니다.`);
+      return;
+    }
+    
+    setStocks([...stocks, {
+      ticker: stock.ticker,
+      name: stock.name,
+      exchange: stock.exchange,
+      shares: 0,
+      price: 0, // TODO: 실시간 가격 API 연동
+      value: 0
+    }]);
+  };
+
+  const handleRemoveStock = (ticker) => {
+    setStocks(stocks.filter(s => s.ticker !== ticker));
+  };
+
+  const handleSharesChange = (ticker, shares) => {
+    setStocks(stocks.map(s => {
+      if (s.ticker === ticker) {
+        const newShares = parseInt(shares) || 0;
+        return {
+          ...s,
+          shares: newShares,
+          value: newShares * s.price
+        };
+      }
+      return s;
+    }));
+  };
+
+  const getTotalValue = () => {
+    return stocks.reduce((sum, stock) => sum + stock.value, 0);
+  };
 
   const handleQuickOptimize = async () => {
-      if (!optimizerTickers.trim()) {
-        alert(t('minimumOneTicker'));
-        return;
-      }
+    if (stocks.length === 0) {
+      alert(t('minimumOneTicker'));
+      return;
+    }
 
     try {
       setOptimizing(true);
-      const tickerArray = optimizerTickers
-        .split(",")
-        .map((t) => t.trim())
-        .filter((t) => t.length > 0);
+      const tickerArray = stocks.map(s => s.ticker);
 
       // 균등 비중으로 시작
       const equalWeight = 1.0 / tickerArray.length;
@@ -55,10 +94,10 @@ export default function Dashboard({ onNavigateToOptimizer }) {
         const newReturn = response.data.result.optimized.expected_return * 100;
         setPortfolioReturn(newReturn);
       }
-      } catch (err) {
-        console.error("Optimization error:", err);
-        alert(t('optimizationFailed') + ": " + (err.response?.data?.error || err.message));
-      } finally {
+    } catch (err) {
+      console.error("Optimization error:", err);
+      alert(t('optimizationFailed') + ": " + (err.response?.data?.error || err.message));
+    } finally {
       setOptimizing(false);
     }
   };
@@ -96,6 +135,105 @@ export default function Dashboard({ onNavigateToOptimizer }) {
 
       {/* 그리드 레이아웃 */}
       <div className="dashboard-grid">
+        {/* 주식 입력 위젯 */}
+        <div className="dashboard-widget" style={{ gridColumn: 'span 2' }}>
+          <h3 className="widget-title">{t('stockList')}</h3>
+          <div className="widget-content">
+            {/* 주식 검색 */}
+            <div style={{ marginBottom: '1rem' }}>
+              <StockSearchInput
+                onSelectStock={handleAddStock}
+                disabled={optimizing}
+              />
+            </div>
+
+            {/* 주식 목록 */}
+            {stocks.length > 0 ? (
+              <div className="stock-list">
+                <div className="stock-list-header">
+                  <div>{t('ticker')}</div>
+                  <div>{t('name')}</div>
+                  <div>{t('shares')}</div>
+                  <div>{t('price')}</div>
+                  <div>{t('value')}</div>
+                  <div></div>
+                </div>
+                {stocks.map(stock => (
+                  <div key={stock.ticker} className="stock-list-item">
+                    <div className="stock-ticker-cell">{stock.ticker}</div>
+                    <div className="stock-name-cell">{stock.name}</div>
+                    <div className="stock-shares-cell">
+                      <input
+                        type="number"
+                        min="0"
+                        value={stock.shares}
+                        onChange={(e) => handleSharesChange(stock.ticker, e.target.value)}
+                        placeholder={t('sharesPlaceholder')}
+                        disabled={optimizing}
+                        className="shares-input"
+                      />
+                    </div>
+                    <div className="stock-price-cell">
+                      ${stock.price.toFixed(2)}
+                    </div>
+                    <div className="stock-value-cell">
+                      ${stock.value.toFixed(2)}
+                    </div>
+                    <div className="stock-actions-cell">
+                      <button
+                        onClick={() => handleRemoveStock(stock.ticker)}
+                        disabled={optimizing}
+                        className="remove-button"
+                      >
+                        {t('removeStock')}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="stock-list-total">
+                  <div>{t('total')}</div>
+                  <div></div>
+                  <div>{stocks.reduce((sum, s) => sum + s.shares, 0)}</div>
+                  <div></div>
+                  <div>${getTotalValue().toFixed(2)}</div>
+                  <div></div>
+                </div>
+              </div>
+            ) : (
+              <p className="placeholder-text" style={{ textAlign: 'center', padding: '2rem' }}>
+                {t('searchStockOrTicker')}
+              </p>
+            )}
+
+            {/* 최적화 버튼 */}
+            {stocks.length > 0 && (
+              <div style={{ marginTop: '1rem' }}>
+                <div className="widget-field" style={{ marginBottom: '1rem' }}>
+                  <label>{t('targetRisk')}</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={targetRisk} 
+                    className="widget-input-small"
+                    onChange={(e) => setTargetRisk(parseFloat(e.target.value) || 0)}
+                    disabled={optimizing}
+                  />
+                </div>
+                <button 
+                  className="widget-button"
+                  onClick={handleQuickOptimize}
+                  disabled={optimizing}
+                  style={{ width: '100%' }}
+                >
+                  {optimizing ? t('optimizing') : t('optimize')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* 최적화 결과 위젯 */}
         <div className="dashboard-widget">
           <h3 className="widget-title">{t('optimizationResult')}</h3>
@@ -140,59 +278,8 @@ export default function Dashboard({ onNavigateToOptimizer }) {
             <div className="chatbot-question">{t('whatIsSharpeRatio')}</div>
             <div className="chatbot-input">
               <input type="text" placeholder={t('typeMessage')} />
-              <button>{t('optimize')}</button>
+              <button>{t('send')}</button>
             </div>
-          </div>
-        </div>
-
-        {/* 최적화 실행 위젯 */}
-        <div className="dashboard-widget">
-          <h3 className="widget-title">{t('optimizer')}</h3>
-          <div className="widget-content">
-            <input
-              type="text"
-              placeholder={t('enterAssets')}
-              className="widget-input"
-              value={optimizerTickers}
-              onChange={(e) => setOptimizerTickers(e.target.value)}
-              disabled={optimizing}
-            />
-            <div className="widget-field">
-              <label>{t('targetRisk')}</label>
-              <input 
-                type="number" 
-                step="0.01"
-                min="0"
-                max="1"
-                value={targetRisk} 
-                className="widget-input-small"
-                onChange={(e) => setTargetRisk(parseFloat(e.target.value) || 0)}
-                disabled={optimizing}
-              />
-            </div>
-            <button 
-              className="widget-button"
-              onClick={handleQuickOptimize}
-              disabled={optimizing}
-            >
-              {optimizing ? t('optimize') + '...' : t('optimize')}
-            </button>
-            <button
-              style={{
-                width: '100%',
-                marginTop: '0.5rem',
-                padding: '0.5rem',
-                background: '#f0f0f0',
-                color: '#333',
-                border: '1px solid #ddd',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-              onClick={() => onNavigateToOptimizer && onNavigateToOptimizer('optimizer')}
-            >
-              {t('goToOptimizerPage')}
-            </button>
           </div>
         </div>
 
@@ -206,6 +293,23 @@ export default function Dashboard({ onNavigateToOptimizer }) {
                 <strong>{optimizationResult?.sharpe_ratio?.toFixed(2) || '1.25'}</strong>
               </div>
             </div>
+            <button
+              style={{
+                width: '100%',
+                marginTop: '1rem',
+                padding: '0.75rem',
+                background: '#667eea',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+                fontWeight: '500'
+              }}
+              onClick={() => onNavigateToOptimizer && onNavigateToOptimizer('optimizer')}
+            >
+              {t('goToOptimizerPage')}
+            </button>
           </div>
         </div>
       </div>
