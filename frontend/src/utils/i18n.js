@@ -241,6 +241,19 @@ export const translations = {
     optimizePortfolioDesc: "Use quantum computing to find the optimal portfolio allocation",
     optimizeMyPortfolio: "Optimize My Portfolio",
     needAtLeast2Stocks: "Need at least 2 stocks to optimize",
+    
+    // Optimizer Page
+    noPortfolioData: "No Portfolio Data",
+    pleaseCreatePortfolio: "Please create a portfolio on the Dashboard first",
+    goToDashboard: "Go to Dashboard",
+    quantumVsClassicalComparison: "Compare Quantum & Classical Optimization",
+    optimizationSettings: "Optimization Settings",
+    runClassical: "Run Classical",
+    runQuantum: "Run Quantum (QAOA)",
+    runComparison: "Compare Both",
+    result: "Result",
+    quantumVsClassical: "Quantum vs Classical Comparison",
+    viewDetailedAnalytics: "View Detailed Analytics",
   },
   ko: {
     // Navigation
@@ -490,6 +503,19 @@ export const translations = {
     optimizePortfolioDesc: "양자 컴퓨팅을 사용하여 최적의 포트폴리오 배분을 찾으세요",
     optimizeMyPortfolio: "내 포트폴리오 최적화",
     needAtLeast2Stocks: "최적화하려면 최소 2개 이상의 주식이 필요합니다",
+    
+    // Optimizer Page
+    noPortfolioData: "포트폴리오 데이터 없음",
+    pleaseCreatePortfolio: "먼저 대시보드에서 포트폴리오를 생성해주세요",
+    goToDashboard: "대시보드로 이동",
+    quantumVsClassicalComparison: "양자 & 고전 최적화 비교",
+    optimizationSettings: "최적화 설정",
+    runClassical: "고전 최적화 실행",
+    runQuantum: "양자 최적화 (QAOA) 실행",
+    runComparison: "양쪽 비교",
+    result: "결과",
+    quantumVsClassical: "양자 vs 고전 비교",
+    viewDetailedAnalytics: "상세 분석 보기",
   }
 };
 
