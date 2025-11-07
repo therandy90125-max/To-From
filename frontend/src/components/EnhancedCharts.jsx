@@ -26,6 +26,12 @@ const EnhancedCharts = () => {
   
   const [optimizationData, setOptimizationData] = useState(null);
   const [hasData, setHasData] = useState(false);
+  
+  // Safe number formatting function
+  const safeFormat = (value, decimals = 2) => {
+    const num = Number(value);
+    return isNaN(num) || !isFinite(num) ? 0 : num;
+  };
 
   useEffect(() => {
     // Load last optimization result from localStorage
@@ -140,14 +146,14 @@ const EnhancedCharts = () => {
               <span className="text-2xl">📈</span>
             </div>
             <div className="text-4xl font-bold mb-1">
-              +{(optimized.expected_return * 100).toFixed(2)}%
+              +{(safeFormat(optimized.expected_return, 4) * 100).toFixed(2)}%
             </div>
             <div className="text-sm opacity-90">{t('annualExpected')}</div>
-            {improvement && (
+            {improvement && !isNaN(improvement.return_improvement) && (
               <div className="mt-3 pt-3 border-t border-green-400">
                 <span className="text-xs opacity-75">{t('improvement')}: </span>
                 <span className="text-lg font-bold">
-                  +{(improvement.return_improvement * 100).toFixed(2)}%
+                  +{(safeFormat(improvement.return_improvement, 4) * 100).toFixed(2)}%
                 </span>
               </div>
             )}
@@ -160,14 +166,14 @@ const EnhancedCharts = () => {
               <span className="text-2xl">⚠️</span>
             </div>
             <div className="text-4xl font-bold mb-1">
-              {(optimized.risk * 100).toFixed(2)}%
+              {(safeFormat(optimized.risk, 4) * 100).toFixed(2)}%
             </div>
             <div className="text-sm opacity-90">{t('volatility')}</div>
-            {improvement && (
+            {improvement && !isNaN(improvement.risk_change) && (
               <div className="mt-3 pt-3 border-t border-orange-400">
                 <span className="text-xs opacity-75">{t('change')}: </span>
-                <span className={`text-lg font-bold ${improvement.risk_change <= 0 ? 'text-white' : 'text-orange-200'}`}>
-                  {improvement.risk_change >= 0 ? '+' : ''}{(improvement.risk_change * 100).toFixed(2)}%
+                <span className={`text-lg font-bold ${safeFormat(improvement.risk_change, 4) <= 0 ? 'text-white' : 'text-orange-200'}`}>
+                  {safeFormat(improvement.risk_change, 4) >= 0 ? '+' : ''}{(safeFormat(improvement.risk_change, 4) * 100).toFixed(2)}%
                 </span>
               </div>
             )}
@@ -180,16 +186,16 @@ const EnhancedCharts = () => {
               <span className="text-2xl">⭐</span>
             </div>
             <div className="text-4xl font-bold mb-1">
-              {optimized.sharpe_ratio?.toFixed(3) || '0.000'}
+              {safeFormat(optimized.sharpe_ratio, 4).toFixed(3)}
             </div>
             <div className="text-sm opacity-90">
-              {optimized.sharpe_ratio > 1.5 ? t('excellent') : optimized.sharpe_ratio > 1.0 ? t('good') : t('average')}
+              {safeFormat(optimized.sharpe_ratio, 4) > 1.5 ? t('excellent') : safeFormat(optimized.sharpe_ratio, 4) > 1.0 ? t('good') : t('average')}
             </div>
-            {improvement && (
+            {improvement && !isNaN(improvement.sharpe_improvement) && (
               <div className="mt-3 pt-3 border-t border-purple-400">
                 <span className="text-xs opacity-75">{t('improvement')}: </span>
                 <span className="text-lg font-bold">
-                  +{improvement.sharpe_improvement?.toFixed(3) || '0.000'}
+                  +{safeFormat(improvement.sharpe_improvement, 4).toFixed(3)}
                 </span>
               </div>
             )}

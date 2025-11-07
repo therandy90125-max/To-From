@@ -74,10 +74,37 @@ export default function PortfolioOptimizer() {
       if (response.data.success) {
         const result = response.data.result;
         
+        // Parse result data safely
+        const parsedResult = {
+          selected_tickers: result.selected_tickers || tickers,
+          optimized_weights: Array.isArray(result.optimized_weights) 
+            ? result.optimized_weights 
+            : (typeof result.optimized_weights === 'string' 
+                ? result.optimized_weights.split(' ').map(Number)
+                : result.weights || initialWeights),
+          optimized_metrics: result.optimized_metrics || result.optimized || {
+            expected_return: result.expected_return || 0,
+            risk: result.risk || 0,
+            sharpe_ratio: result.sharpe_ratio || 0
+          },
+          original_metrics: result.original_metrics || result.original || {
+            expected_return: 0,
+            risk: 0,
+            sharpe_ratio: 0
+          },
+          improvement: result.improvement || result.improvements || {
+            return_improvement: 0,
+            risk_change: 0,
+            sharpe_improvement: 0
+          },
+          method: result.method || method,
+          quantum_verified: result.quantum_verified || false
+        };
+        
         if (method === 'classical') {
-          setClassicalResult(result);
+          setClassicalResult(parsedResult);
         } else {
-          setQuantumResult(result);
+          setQuantumResult(parsedResult);
         }
         
         // Save to localStorage for Analytics
@@ -86,14 +113,18 @@ export default function PortfolioOptimizer() {
             portfolio: originalPortfolio,
             weights: initialWeights,
             tickers,
-            ...result.original_metrics
+            expected_return: parsedResult.original_metrics.expected_return || 0,
+            risk: parsedResult.original_metrics.risk || 0,
+            sharpe_ratio: parsedResult.original_metrics.sharpe_ratio || 0
           },
           optimized: {
-            ...result.optimized_metrics,
-            weights: result.optimized_weights,
-            selected_tickers: result.selected_tickers
+            expected_return: parsedResult.optimized_metrics.expected_return || 0,
+            risk: parsedResult.optimized_metrics.risk || 0,
+            sharpe_ratio: parsedResult.optimized_metrics.sharpe_ratio || 0,
+            weights: parsedResult.optimized_weights,
+            selected_tickers: parsedResult.selected_tickers
           },
-          improvement: result.improvement,
+          improvement: parsedResult.improvement,
           method,
           timestamp: new Date().toISOString()
         }));
@@ -362,8 +393,14 @@ export default function PortfolioOptimizer() {
 
 // Optimization Result Card Component
 function OptimizationResultCard({ result, currencySymbol, t, color }) {
-  const metrics = result.optimized_metrics;
-  const improvement = result.improvement;
+  const metrics = result.optimized_metrics || {};
+  const improvement = result.improvement || {};
+  
+  // Safe number formatting
+  const safeFormat = (value, decimals = 2) => {
+    const num = Number(value);
+    return isNaN(num) ? '0.00' : num.toFixed(decimals);
+  };
 
   return (
     <div>
@@ -371,28 +408,28 @@ function OptimizationResultCard({ result, currencySymbol, t, color }) {
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="bg-gray-50 rounded-lg p-3">
           <div className="text-xs text-gray-600 mb-1">{t('expectedReturnLabel')}</div>
-          <div className="text-lg font-bold text-gray-900">{(metrics.expected_return * 100).toFixed(2)}%</div>
-          {improvement && (
+          <div className="text-lg font-bold text-gray-900">{safeFormat((metrics.expected_return || 0) * 100, 2)}%</div>
+          {improvement && !isNaN(improvement.return_improvement) && (
             <div className={`text-xs ${improvement.return_improvement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {improvement.return_improvement >= 0 ? '+' : ''}{(improvement.return_improvement * 100).toFixed(2)}%
+              {improvement.return_improvement >= 0 ? '+' : ''}{safeFormat(improvement.return_improvement * 100, 2)}%
             </div>
           )}
         </div>
         <div className="bg-gray-50 rounded-lg p-3">
           <div className="text-xs text-gray-600 mb-1">{t('riskLabel')}</div>
-          <div className="text-lg font-bold text-gray-900">{(metrics.risk * 100).toFixed(2)}%</div>
-          {improvement && (
+          <div className="text-lg font-bold text-gray-900">{safeFormat((metrics.risk || 0) * 100, 2)}%</div>
+          {improvement && !isNaN(improvement.risk_change) && (
             <div className={`text-xs ${improvement.risk_change <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {improvement.risk_change >= 0 ? '+' : ''}{(improvement.risk_change * 100).toFixed(2)}%
+              {improvement.risk_change >= 0 ? '+' : ''}{safeFormat(improvement.risk_change * 100, 2)}%
             </div>
           )}
         </div>
         <div className="bg-gray-50 rounded-lg p-3">
           <div className="text-xs text-gray-600 mb-1">{t('sharpeRatioLabel')}</div>
-          <div className="text-lg font-bold text-gray-900">{metrics.sharpe_ratio.toFixed(3)}</div>
-          {improvement && (
+          <div className="text-lg font-bold text-gray-900">{safeFormat(metrics.sharpe_ratio || 0, 3)}</div>
+          {improvement && !isNaN(improvement.sharpe_improvement) && (
             <div className={`text-xs ${improvement.sharpe_improvement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {improvement.sharpe_improvement >= 0 ? '+' : ''}{improvement.sharpe_improvement.toFixed(3)}
+              {improvement.sharpe_improvement >= 0 ? '+' : ''}{safeFormat(improvement.sharpe_improvement, 3)}
             </div>
           )}
         </div>
