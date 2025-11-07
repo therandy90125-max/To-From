@@ -254,6 +254,13 @@ export const translations = {
     result: "Result",
     quantumVsClassical: "Quantum vs Classical Comparison",
     viewDetailedAnalytics: "View Detailed Analytics",
+    
+    // Analytics Page
+    weightComparison: "Weight Comparison",
+    weight: "Weight",
+    riskChange: "Risk Change",
+    sharpeImprovement: "Sharpe Improvement",
+    overallScore: "Overall Score",
   },
   ko: {
     // Navigation
@@ -516,6 +523,13 @@ export const translations = {
     result: "결과",
     quantumVsClassical: "양자 vs 고전 비교",
     viewDetailedAnalytics: "상세 분석 보기",
+    
+    // Analytics Page
+    weightComparison: "비중 비교",
+    weight: "비중",
+    riskChange: "리스크 변화",
+    sharpeImprovement: "샤프 비율 개선",
+    overallScore: "종합 점수",
   }
 };
 

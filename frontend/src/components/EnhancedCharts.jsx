@@ -1,30 +1,29 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
 } from 'recharts';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getCurrencySymbol, getCurrencyCode } from '../utils/currencyUtils';
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+const COLORS_ORIGINAL = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181'];
+const COLORS_OPTIMIZED = ['#6C5CE7', '#00B894', '#FDCB6E', '#E17055', '#74B9FF'];
 
 const EnhancedCharts = () => {
   const { t, language } = useLanguage();
+  const currencySymbol = getCurrencySymbol(language);
+  const currencyCode = getCurrencyCode(language);
+  
   const [optimizationData, setOptimizationData] = useState(null);
   const [hasData, setHasData] = useState(false);
 
@@ -34,6 +33,7 @@ const EnhancedCharts = () => {
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
+        console.log('Loaded optimization data:', parsed);
         setOptimizationData(parsed);
         setHasData(true);
       } catch (e) {
@@ -45,31 +45,10 @@ const EnhancedCharts = () => {
     }
   }, []);
 
-  const chartVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-  };
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="text-sm font-semibold text-gray-700 mb-1">{label}</p>
-          {payload.map((entry, index) => (
-            <p key={index} className="text-xs" style={{ color: entry.color }}>
-              {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(4) : entry.value}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
   // No data state
   if (!hasData || !optimizationData) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -90,282 +69,293 @@ const EnhancedCharts = () => {
             <p className="text-gray-600 mb-6">
               {t('pleaseRunOptimization')}
             </p>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                window.location.hash = '';
-                window.dispatchEvent(new HashChangeEvent('hashchange'));
-              }}
-              className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+            <button
+              onClick={() => window.location.hash = 'optimizer'}
+              className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
             >
-              {t('goToOptimizer')}
-            </a>
+              {t('goToOptimizer')} →
+            </button>
           </div>
         </motion.div>
       </div>
     );
   }
 
-  const { result, input, method, timestamp } = optimizationData;
+  const { original, optimized, improvement, method, timestamp } = optimizationData;
 
-  // Get currency info based on language
-  const currencySymbol = getCurrencySymbol(language);
-  const currencyCode = getCurrencyCode(language);
+  // Prepare data for pie charts
+  const originalPieData = original.tickers?.map((ticker, index) => ({
+    name: ticker.split('.')[0], // Remove .KS extension
+    ticker,
+    value: (original.weights[index] || 0) * 100,
+  })) || [];
 
-  // Prepare data for charts
-  const weightsComparisonData = result.selected_tickers.map((ticker, index) => ({
-    name: ticker,
-    original: input?.initialWeights ? input.initialWeights[index] * 100 : 0,
-    optimized: result.weights[index] * 100,
-  }));
+  const optimizedPieData = optimized.selected_tickers?.map((ticker, index) => ({
+    name: ticker.split('.')[0],
+    ticker,
+    value: (optimized.weights[index] || 0) * 100,
+  })) || [];
 
-  const pieData = result.selected_tickers.map((ticker, index) => ({
-    name: ticker,
-    value: result.weights[index] * 100,
-  }));
-
-  const metricsData = [
-    { 
-      metric: language === 'ko' ? '기대 수익률' : 'Expected Return', 
-      value: result.expected_return * 100,
-      fullMark: 30 
-    },
-    { 
-      metric: language === 'ko' ? '리스크' : 'Risk', 
-      value: result.risk * 100,
-      fullMark: 30 
-    },
-    { 
-      metric: language === 'ko' ? '샤프 비율' : 'Sharpe Ratio', 
-      value: result.sharpe_ratio,
-      fullMark: 3 
-    },
-  ];
+  // Prepare data for bar chart (weight comparison)
+  const weightComparisonData = optimized.selected_tickers?.map((ticker, index) => {
+    const originalIndex = original.tickers?.indexOf(ticker) ?? -1;
+    return {
+      name: ticker.split('.')[0],
+      ticker,
+      original: originalIndex >= 0 ? (original.weights[originalIndex] * 100) : 0,
+      optimized: (optimized.weights[index] * 100),
+    };
+  }) || [];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-7xl mx-auto mb-6"
-      >
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">
-          📊 {t('portfolioAnalytics')}
-        </h1>
-        <p className="text-gray-600">
-          {t('methodUsed')}: {method === 'quantum' ? t('quantumOptimization') : t('classicalOptimization')} | {t('executedAt')}: {new Date(timestamp).toLocaleString()}
-        </p>
-      </motion.div>
-
-      {/* Stats Summary */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="max-w-7xl mx-auto mb-6 grid grid-cols-1 md:grid-cols-3 gap-4"
-      >
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold opacity-90">
-              {t('expectedReturnAnnual')}
-            </span>
-            <span className="text-3xl">📈</span>
-          </div>
-          <div className="text-3xl font-bold">
-            +{(result.expected_return * 100).toFixed(2)}%
-          </div>
-          <div className="text-sm opacity-75 mt-1">
-            {t('annualExpected')}
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold opacity-90">
-              {t('portfolioRisk')}
-            </span>
-            <span className="text-3xl">⚠️</span>
-          </div>
-          <div className="text-3xl font-bold">
-            {(result.risk * 100).toFixed(2)}%
-          </div>
-          <div className="text-sm opacity-75 mt-1">
-            {t('volatility')}
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold opacity-90">
-              {t('sharpeRatioLabel')}
-            </span>
-            <span className="text-3xl">🎯</span>
-          </div>
-          <div className="text-3xl font-bold">
-            {result.sharpe_ratio.toFixed(2)}
-          </div>
-          <div className="text-sm opacity-75 mt-1">
-            {result.sharpe_ratio > 1.5 
-              ? t('excellent')
-              : result.sharpe_ratio > 1 
-                ? t('good')
-                : t('average')}
-          </div>
-        </div>
-      </motion.div>
-
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Original vs Optimized Weights Comparison */}
-        {input?.initialWeights && (
-          <motion.div
-            variants={chartVariants}
-            initial="hidden"
-            animate="visible"
-            transition={{ delay: 0.2 }}
-            className="bg-white rounded-xl shadow-lg p-6"
-          >
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              🎯 {t('originalVsOptimized')}
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={weightsComparisonData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="name" stroke="#6b7280" style={{ fontSize: 12 }} />
-                <YAxis stroke="#6b7280" style={{ fontSize: 12 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                <Bar
-                  dataKey="original"
-                  fill="#9ca3af"
-                  name={t('originalWeight')}
-                  radius={[8, 8, 0, 0]}
-                  animationDuration={1000}
-                />
-                <Bar
-                  dataKey="optimized"
-                  fill="#3b82f6"
-                  name={t('optimizedWeight')}
-                  radius={[8, 8, 0, 0]}
-                  animationDuration={1000}
-                  animationBegin={500}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </motion.div>
-        )}
-
-        {/* Risk Metrics Radar */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <motion.div
-          variants={chartVariants}
-          initial="hidden"
-          animate="visible"
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-xl shadow-lg p-6"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
         >
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            📊 {t('riskMetricsAnalysis')}
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <RadarChart data={metricsData}>
-              <PolarGrid stroke="#e5e7eb" />
-              <PolarAngleAxis
-                dataKey="metric"
-                tick={{ fill: '#6b7280', fontSize: 12 }}
-              />
-              <PolarRadiusAxis tick={{ fill: '#6b7280', fontSize: 10 }} />
-              <Radar
-                name="Metrics"
-                dataKey="value"
-                stroke="#8b5cf6"
-                fill="#8b5cf6"
-                fillOpacity={0.6}
-                animationDuration={1500}
-              />
-              <Tooltip content={<CustomTooltip />} />
-            </RadarChart>
-          </ResponsiveContainer>
-          <div className="mt-4 grid grid-cols-1 gap-2 text-sm">
-            {metricsData.map((metric, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-2 bg-gray-50 rounded"
-              >
-                <span className="text-gray-600">{metric.metric}</span>
-                <span className="font-semibold text-gray-800">
-                  {metric.value.toFixed(2)}
-                  {metric.metric.includes(language === 'ko' ? '수익률' : 'Return') || metric.metric.includes(language === 'ko' ? '리스크' : 'Risk') ? '%' : ''}
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+            📊 {t('portfolioAnalytics')}
+          </h1>
+          <p className="text-gray-600">
+            {t('methodUsed')}: <span className="font-semibold text-indigo-600">
+              {method === 'quantum' ? t('quantumOptimization') : t('classicalOptimization')}
+            </span> | {t('executedAt')}: {new Date(timestamp).toLocaleString(language === 'ko' ? 'ko-KR' : 'en-US')}
+          </p>
+        </motion.div>
+
+        {/* Performance Summary Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+        >
+          {/* Expected Return Card */}
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium opacity-90">{t('expectedReturnAnnual')}</span>
+              <span className="text-2xl">📈</span>
+            </div>
+            <div className="text-4xl font-bold mb-1">
+              +{(optimized.expected_return * 100).toFixed(2)}%
+            </div>
+            <div className="text-sm opacity-90">{t('annualExpected')}</div>
+            {improvement && (
+              <div className="mt-3 pt-3 border-t border-green-400">
+                <span className="text-xs opacity-75">{t('improvement')}: </span>
+                <span className="text-lg font-bold">
+                  +{(improvement.return_improvement * 100).toFixed(2)}%
                 </span>
               </div>
-            ))}
+            )}
+          </div>
+
+          {/* Risk Card */}
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium opacity-90">{t('portfolioRisk')}</span>
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <div className="text-4xl font-bold mb-1">
+              {(optimized.risk * 100).toFixed(2)}%
+            </div>
+            <div className="text-sm opacity-90">{t('volatility')}</div>
+            {improvement && (
+              <div className="mt-3 pt-3 border-t border-orange-400">
+                <span className="text-xs opacity-75">{t('change')}: </span>
+                <span className={`text-lg font-bold ${improvement.risk_change <= 0 ? 'text-white' : 'text-orange-200'}`}>
+                  {improvement.risk_change >= 0 ? '+' : ''}{(improvement.risk_change * 100).toFixed(2)}%
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Sharpe Ratio Card */}
+          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium opacity-90">{t('sharpeRatio')}</span>
+              <span className="text-2xl">⭐</span>
+            </div>
+            <div className="text-4xl font-bold mb-1">
+              {optimized.sharpe_ratio?.toFixed(3) || '0.000'}
+            </div>
+            <div className="text-sm opacity-90">
+              {optimized.sharpe_ratio > 1.5 ? t('excellent') : optimized.sharpe_ratio > 1.0 ? t('good') : t('average')}
+            </div>
+            {improvement && (
+              <div className="mt-3 pt-3 border-t border-purple-400">
+                <span className="text-xs opacity-75">{t('improvement')}: </span>
+                <span className="text-lg font-bold">
+                  +{improvement.sharpe_improvement?.toFixed(3) || '0.000'}
+                </span>
+              </div>
+            )}
           </div>
         </motion.div>
 
-        {/* Portfolio Distribution Pie Chart */}
+        {/* Portfolio Comparison Section */}
         <motion.div
-          variants={chartVariants}
-          initial="hidden"
-          animate="visible"
-          transition={{ delay: 0.4 }}
-          className="bg-white rounded-xl shadow-lg p-6 lg:col-span-2"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white rounded-2xl shadow-xl p-8 mb-8"
         >
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            🥧 {t('optimizedDistribution')}
-          </h3>
-          <div className="flex flex-col md:flex-row items-center justify-center gap-8">
-            <ResponsiveContainer width="100%" height={350} className="md:w-1/2">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry.name}: ${entry.value.toFixed(1)}%`}
-                  outerRadius={120}
-                  fill="#8884d8"
-                  dataKey="value"
-                  animationDuration={1500}
-                  animationBegin={0}
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:w-1/2">
-              {pieData.map((stock, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.5 + index * 0.1, type: 'spring' }}
-                  className="p-3 rounded-lg text-center border-2"
-                  style={{ 
-                    backgroundColor: `${COLORS[index % COLORS.length]}15`,
-                    borderColor: COLORS[index % COLORS.length]
-                  }}
-                >
-                  <div
-                    className="w-6 h-6 rounded-full mx-auto mb-2"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  ></div>
-                  <div className="text-sm font-semibold text-gray-800">{stock.name}</div>
-                  <div className="text-2xl font-bold text-gray-900 my-1">
-                    {stock.value.toFixed(1)}%
-                  </div>
-                  {input?.initialWeights && (
-                    <div className="text-xs text-gray-500">
-                      {stock.value > input.initialWeights[index] * 100 ? '↑' : '↓'}{' '}
-                      {Math.abs(stock.value - input.initialWeights[index] * 100).toFixed(1)}%
-                    </div>
-                  )}
-                </motion.div>
-              ))}
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+            🔄 {t('originalVsOptimized')}
+          </h2>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Original Portfolio */}
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
+                {t('originalPortfolio')}
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={originalPieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, value }) => `${name}\n${value.toFixed(1)}%`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {originalPieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS_ORIGINAL[index % COLORS_ORIGINAL.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `${value.toFixed(2)}%`} />
+                </PieChart>
+              </ResponsiveContainer>
+              
+              {/* Original Metrics */}
+              <div className="mt-4 space-y-2">
+                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                  <span className="text-sm text-gray-600">{t('expectedReturnLabel')}</span>
+                  <span className="font-semibold text-gray-900">{(original.expected_return * 100).toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                  <span className="text-sm text-gray-600">{t('riskLabel')}</span>
+                  <span className="font-semibold text-gray-900">{(original.risk * 100).toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                  <span className="text-sm text-gray-600">{t('sharpeRatioLabel')}</span>
+                  <span className="font-semibold text-gray-900">{original.sharpe_ratio?.toFixed(3) || '0.000'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Optimized Portfolio */}
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
+                {t('optimizedPortfolio')}
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={optimizedPieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, value }) => `${name}\n${value.toFixed(1)}%`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {optimizedPieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS_OPTIMIZED[index % COLORS_OPTIMIZED.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `${value.toFixed(2)}%`} />
+                </PieChart>
+              </ResponsiveContainer>
+              
+              {/* Optimized Metrics */}
+              <div className="mt-4 space-y-2">
+                <div className="flex justify-between items-center p-2 bg-indigo-50 rounded">
+                  <span className="text-sm text-indigo-700">{t('expectedReturnLabel')}</span>
+                  <span className="font-bold text-indigo-900">{(optimized.expected_return * 100).toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-indigo-50 rounded">
+                  <span className="text-sm text-indigo-700">{t('riskLabel')}</span>
+                  <span className="font-bold text-indigo-900">{(optimized.risk * 100).toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-indigo-50 rounded">
+                  <span className="text-sm text-indigo-700">{t('sharpeRatioLabel')}</span>
+                  <span className="font-bold text-indigo-900">{optimized.sharpe_ratio?.toFixed(3) || '0.000'}</span>
+                </div>
+              </div>
             </div>
           </div>
+        </motion.div>
+
+        {/* Weight Comparison Bar Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white rounded-2xl shadow-xl p-8"
+        >
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">
+            📊 {t('weightComparison')}
+          </h2>
+          
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart
+              data={weightComparisonData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="name" stroke="#6b7280" style={{ fontSize: 12 }} />
+              <YAxis stroke="#6b7280" style={{ fontSize: 12 }} label={{ value: t('weight') + ' (%)', angle: -90, position: 'insideLeft' }} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                formatter={(value) => `${value.toFixed(2)}%`}
+              />
+              <Legend />
+              <Bar dataKey="original" fill="#FF6B6B" name={t('originalWeight')} radius={[8, 8, 0, 0]} />
+              <Bar dataKey="optimized" fill="#6C5CE7" name={t('optimizedWeight')} radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+
+          {/* Improvement Summary */}
+          {improvement && (
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-2xl mb-1">⭐</div>
+                <div className="text-xs text-gray-600 mb-1">{t('returnImprovement')}</div>
+                <div className="text-lg font-bold text-green-600">
+                  +{(improvement.return_improvement * 100).toFixed(2)}%
+                </div>
+              </div>
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <div className="text-2xl mb-1">🛡️</div>
+                <div className="text-xs text-gray-600 mb-1">{t('riskChange')}</div>
+                <div className={`text-lg font-bold ${improvement.risk_change <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                  {improvement.risk_change >= 0 ? '+' : ''}{(improvement.risk_change * 100).toFixed(2)}%
+                </div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <div className="text-2xl mb-1">📈</div>
+                <div className="text-xs text-gray-600 mb-1">{t('sharpeImprovement')}</div>
+                <div className="text-lg font-bold text-purple-600">
+                  +{improvement.sharpe_improvement?.toFixed(3) || '0.000'}
+                </div>
+              </div>
+              <div className="text-center p-4 bg-indigo-50 rounded-lg">
+                <div className="text-2xl mb-1">🎯</div>
+                <div className="text-xs text-gray-600 mb-1">{t('overallScore')}</div>
+                <div className="text-lg font-bold text-indigo-600">
+                  +{(improvement.score_improvement * 100).toFixed(2)}%
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>
