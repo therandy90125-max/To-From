@@ -5,7 +5,7 @@ import { parseTickers, validateTickers, formatPercent } from '../utils/portfolio
 import StockPriceWidget from './StockPriceWidget';
 import StockSearchInput from './StockSearchInput';
 
-const DashboardRefactored = () => {
+const Dashboard = () => {
   const { t } = useLanguage();
   
   // Stock management
@@ -308,5 +308,4 @@ const DashboardRefactored = () => {
   );
 };
 
-export default DashboardRefactored;
-
+export default Dashboard;
