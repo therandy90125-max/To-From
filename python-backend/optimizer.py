@@ -180,7 +180,7 @@ class PortfolioOptimizer:
         
         n = len(self.tickers)
         print(f"\n{'='*60}")
-        print(f"🔬 QUANTUM OPTIMIZATION STARTING (QAOA)")
+        print(f"[QUANTUM] OPTIMIZATION STARTING (QAOA)")
         print(f"{'='*60}")
         print(f"  Number of stocks: {n}")
         print(f"  QAOA reps (circuit depth): {reps}")
@@ -232,7 +232,7 @@ class PortfolioOptimizer:
         result = quantum_mes.solve(qp)
         
         print(f"\n{'='*60}")
-        print(f"✅ QUANTUM OPTIMIZATION COMPLETED!")
+        print(f"[SUCCESS] QUANTUM OPTIMIZATION COMPLETED!")
         print(f"{'='*60}")
         print(f"  Solution vector: {result.x}")
         print(f"  Optimal value: {result.fval:.6f}")

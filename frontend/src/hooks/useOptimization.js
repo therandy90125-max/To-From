@@ -45,6 +45,11 @@ export const useOptimization = () => {
         // Save to localStorage for Analytics page
         localStorage.setItem('lastOptimizationResult', JSON.stringify({
           result: resultData,
+          input: {
+            tickers,
+            riskFactor,
+            period,
+          },
           method,
           timestamp: new Date().toISOString(),
         }));
