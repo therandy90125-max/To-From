@@ -765,10 +765,12 @@ def search_stocks_advanced():
         for ticker, name in us_stocks.items():
             if query in ticker or query in name.upper():
                 if not any(r['ticker'] == ticker for r in results):
+                    # Determine exchange based on ticker
+                    exchange = 'NYSE' if ticker in ['BRK.B', 'JPM', 'V', 'BAC', 'WMT', 'JNJ', 'PG', 'KO', 'PEP', 'XOM', 'CVX', 'BA', 'CAT', 'GE'] else 'NASDAQ'
                     results.append({
                         'ticker': ticker,
                         'name': name,
-                        'exchange': 'NASDAQ'
+                        'exchange': exchange
                     })
         
         # Alpha Vantage API로 검색 (로컬 DB에 없는 경우)

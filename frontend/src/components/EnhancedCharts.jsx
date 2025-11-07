@@ -69,12 +69,12 @@ const EnhancedCharts = () => {
             <p className="text-gray-600 mb-6">
               {t('pleaseRunOptimization')}
             </p>
-            <button
-              onClick={() => window.location.hash = 'optimizer'}
-              className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              {t('goToOptimizer')} →
-            </button>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('navigateTo', { detail: { page: 'optimizer' } }))}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+          >
+            {t('goToOptimizer')} →
+          </button>
           </div>
         </motion.div>
       </div>

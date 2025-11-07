@@ -117,7 +117,7 @@ export default function PortfolioOptimizer() {
 
   // Navigate to Analytics
   const goToAnalytics = () => {
-    window.location.hash = 'charts';
+    window.dispatchEvent(new CustomEvent('navigateTo', { detail: { page: 'charts' } }));
   };
 
   // Calculate original portfolio distribution
@@ -143,12 +143,12 @@ export default function PortfolioOptimizer() {
           <p className="text-gray-600 mb-6">
             {t('pleaseCreatePortfolio')}
           </p>
-          <button
-            onClick={() => window.location.hash = 'dashboard'}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
-          >
-            {t('goToDashboard')} →
-          </button>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('navigateTo', { detail: { page: 'dashboard' } }))}
+              className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              {t('goToDashboard')} →
+            </button>
         </div>
       </div>
     );

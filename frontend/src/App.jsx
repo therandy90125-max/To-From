@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -13,6 +13,18 @@ import './styles/About.css';
 function AppContent() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const { t } = useLanguage();
+
+  // Listen for navigation events from other components
+  useEffect(() => {
+    const handleNavigate = (event) => {
+      if (event.detail && event.detail.page) {
+        setCurrentPage(event.detail.page);
+      }
+    };
+
+    window.addEventListener('navigateTo', handleNavigate);
+    return () => window.removeEventListener('navigateTo', handleNavigate);
+  }, []);
 
   const renderPage = () => {
     switch (currentPage) {

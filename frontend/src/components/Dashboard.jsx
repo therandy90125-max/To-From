@@ -98,8 +98,8 @@ const Dashboard = () => {
       timestamp: new Date().toISOString()
     }));
     
-    // Navigate to optimizer page
-    window.location.hash = 'optimizer';
+    // Navigate to optimizer page using custom event
+    window.dispatchEvent(new CustomEvent('navigateTo', { detail: { page: 'optimizer' } }));
   };
 
   return (
