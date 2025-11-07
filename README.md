@@ -1,4 +1,6 @@
-# ToAndFrom 프로젝트
+# QuantaFolio Navigator 🚀
+
+> Quantum-Powered Portfolio Optimization Platform
 
 ## 팀원 가이드
 
