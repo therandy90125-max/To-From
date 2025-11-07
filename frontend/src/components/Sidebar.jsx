@@ -6,8 +6,8 @@ export default function Sidebar({ currentPage, onPageChange, onLanguageChange })
   const menuItems = [
     { id: 'dashboard', icon: '📊', label: t('dashboard') },
     { id: 'optimizer', icon: '🎯', label: t('optimizer') },
-    { id: 'workflow', icon: '🔄', label: 'Workflow' },
-    { id: 'charts', icon: '📈', label: 'Analytics' },
+    { id: 'workflow', icon: '🔄', label: t('workflow') },
+    { id: 'charts', icon: '📈', label: t('analytics') },
     { id: 'chatbot', icon: '💬', label: t('chatbot') },
     { id: 'settings', icon: '⚙️', label: t('settings') },
     { id: 'about', icon: 'ℹ️', label: t('about') },

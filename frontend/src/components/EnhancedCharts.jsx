@@ -19,6 +19,7 @@ import {
   Radar,
 } from 'recharts';
 import { useLanguage } from '../contexts/LanguageContext';
+import { getCurrencySymbol, getCurrencyCode } from '../utils/currencyUtils';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
@@ -75,12 +76,10 @@ const EnhancedCharts = () => {
           className="max-w-7xl mx-auto"
         >
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            📊 Portfolio Analytics
+            📊 {t('portfolioAnalytics')}
           </h1>
           <p className="text-gray-600 mb-8">
-            {language === 'ko' 
-              ? '최적화 결과 비교 및 분석' 
-              : 'Optimization Results Comparison & Analysis'}
+            {t('optimizationComparison')}
           </p>
 
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
@@ -100,7 +99,7 @@ const EnhancedCharts = () => {
               }}
               className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
             >
-              {language === 'ko' ? '최적화 페이지로 이동 →' : 'Go to Optimizer →'}
+              {t('goToOptimizer')}
             </a>
           </div>
         </motion.div>
@@ -109,6 +108,10 @@ const EnhancedCharts = () => {
   }
 
   const { result, input, method, timestamp } = optimizationData;
+
+  // Get currency info based on language
+  const currencySymbol = getCurrencySymbol(language);
+  const currencyCode = getCurrencyCode(language);
 
   // Prepare data for charts
   const weightsComparisonData = result.selected_tickers.map((ticker, index) => ({
@@ -139,9 +142,6 @@ const EnhancedCharts = () => {
       fullMark: 3 
     },
   ];
-
-  const currency = language === 'ko' ? 'KRW' : 'USD';
-  const currencySymbol = language === 'ko' ? '₩' : '$';
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
