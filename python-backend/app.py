@@ -109,7 +109,7 @@ def optimize():
         risk_factor = data.get('risk_factor', 0.5)
         method = data.get('method', 'classical')
         period = data.get('period', '1y')
-        reps = data.get('reps', 1)
+        reps = data.get('reps', 3)  # QAOA 회로 깊이 (기본값 3으로 증가)
         
         # 유효성 검사
         if not 0.0 <= risk_factor <= 1.0:
@@ -243,7 +243,7 @@ def optimize_with_weights():
         risk_factor = data.get('risk_factor', 0.5)
         method = data.get('method', 'quantum')
         period = data.get('period', '1y')
-        reps = data.get('reps', 1)
+        reps = data.get('reps', 3)  # QAOA 회로 깊이 (기본값 3으로 증가)
         
         # 유효성 검사
         if not 0.0 <= risk_factor <= 1.0:

@@ -168,12 +168,24 @@ class PortfolioOptimizer:
             'quantum_verified': False  # 고전적 최적화 플래그
         }
     
-    def optimize_quantum(self, num_qubits: int = None, reps: int = 1) -> Dict:
-        """양자 최적화 (QAOA 사용) - 양자 컴퓨팅 시뮬레이션"""
+    def optimize_quantum(self, num_qubits: int = None, reps: int = 3) -> Dict:
+        """양자 최적화 (QAOA 사용) - 양자 컴퓨팅 시뮬레이션
+        
+        Args:
+            num_qubits: 사용할 큐비트 수 (None이면 자동 결정)
+            reps: QAOA 회로의 깊이 (기본값 3, 높을수록 정확하지만 느림)
+        """
         if self.expected_returns is None or self.covariance_matrix is None:
             self.calculate_returns()
         
         n = len(self.tickers)
+        print(f"\n{'='*60}")
+        print(f"🔬 QUANTUM OPTIMIZATION STARTING (QAOA)")
+        print(f"{'='*60}")
+        print(f"  Number of stocks: {n}")
+        print(f"  QAOA reps (circuit depth): {reps}")
+        print(f"  Risk factor: {self.risk_factor}")
+        print(f"{'='*60}\n")
         
         # Quadratic Program 생성
         qp = QuadraticProgram()
@@ -219,9 +231,13 @@ class PortfolioOptimizer:
         
         result = quantum_mes.solve(qp)
         
-        print(f"  - 양자 최적화 완료!")
-        print(f"  - 최적해: {result.x}")
-        print(f"  - 최적값: {result.fval}")
+        print(f"\n{'='*60}")
+        print(f"✅ QUANTUM OPTIMIZATION COMPLETED!")
+        print(f"{'='*60}")
+        print(f"  Solution vector: {result.x}")
+        print(f"  Optimal value: {result.fval:.6f}")
+        print(f"  Selected stocks (x > 0.5): {[self.tickers[i] for i in range(n) if result.x[i] > 0.5]}")
+        print(f"{'='*60}\n")
         
         # 결과 파싱
         selected = []
@@ -446,7 +462,7 @@ class PortfolioOptimizer:
         if method == 'classical':
             return self.optimize_classical()
         elif method == 'quantum':
-            reps = kwargs.get('reps', 1)
+            reps = kwargs.get('reps', 3)  # QAOA 회로 깊이 기본값 3
             return self.optimize_quantum(reps=reps)
         else:
             raise ValueError(f"알 수 없는 방법: {method}. 'classical' 또는 'quantum'을 사용하세요.")
