@@ -21,7 +21,7 @@
 │  - REST API Gateway                                          │
 │  - CORS 처리                                                 │
 │  - 요청 라우팅 및 검증                                       │
-│  - MySQL 연결 (데이터 저장)                                 │
+│  - MariaDB 연결 (데이터 저장)                               │
 └───────────────────────┬─────────────────────────────────────┘
                         │
                         │ RestTemplate HTTP
@@ -40,7 +40,7 @@
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                        MySQL Database                        │
+│                       MariaDB Database                       │
 │                      (Port 3306)                            │
 │  - 포트폴리오 데이터 저장                                    │
 │  - 사용자 정보 (향후)                                        │
@@ -119,7 +119,7 @@ MySQL Database
 - **Spring Boot 3.2.3** - Java 웹 프레임워크
 - **Spring Web** - REST API
 - **Spring Data JPA** - 데이터베이스 ORM
-- **MySQL Connector** - MySQL 연결
+- **MariaDB Connector** - MariaDB 연결
 - **RestTemplate** - Flask API 호출
 
 ### Backend (Flask)
@@ -129,7 +129,7 @@ MySQL Database
 - **NumPy, Pandas** - 데이터 처리
 
 ### Database
-- **MySQL 8.0+** - 관계형 데이터베이스
+- **MariaDB 10.5+** - 관계형 데이터베이스
 
 ## 환경 설정
 
@@ -157,7 +157,7 @@ CORS(app)  # 모든 origin 허용 (개발 환경)
 
 ## 실행 순서
 
-1. **MySQL 시작** (포트 3306)
+1. **MariaDB 시작** (포트 3306)
 2. **Flask 백엔드 시작** (포트 5000)
    ```bash
    cd python-backend

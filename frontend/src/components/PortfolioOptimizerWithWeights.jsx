@@ -50,14 +50,18 @@ export default function PortfolioOptimizerWithWeights() {
 
       const timeout = method === "quantum" ? 300000 : 60000;
 
+      // Check auto-save setting from localStorage
+      const autoSave = localStorage.getItem('autoSave') === 'true';
+
       const response = await axios.post(
-        "http://localhost:5000/api/optimize/with-weights",
+        "/api/portfolio/optimize/with-weights",
         {
           tickers: tickerArray,
           initial_weights: weightArray,
           risk_factor: riskFactor,
           method: method,
           period: period,
+          auto_save: autoSave,
         },
         {
           timeout: timeout,

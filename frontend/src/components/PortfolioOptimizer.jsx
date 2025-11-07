@@ -30,13 +30,17 @@ export default function PortfolioOptimizer() {
       // 양자 최적화는 시간이 오래 걸릴 수 있으므로 타임아웃을 길게 설정
       const timeout = method === "quantum" ? 300000 : 60000; // 양자: 5분, 고전적: 1분
       
+      // Check auto-save setting from localStorage
+      const autoSave = localStorage.getItem('autoSave') === 'true';
+      
       const response = await axios.post(
-        "http://localhost:5000/api/optimize",
+        "/api/portfolio/optimize",
         {
           tickers: tickerArray,
           risk_factor: riskFactor,
           method: method,
           period: period,
+          auto_save: autoSave,
         },
         {
           timeout: timeout,

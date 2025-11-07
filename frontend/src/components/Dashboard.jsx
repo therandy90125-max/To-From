@@ -28,14 +28,18 @@ export default function Dashboard({ onNavigateToOptimizer }) {
       const equalWeight = 1.0 / tickerArray.length;
       const initialWeights = Array(tickerArray.length).fill(equalWeight);
 
+      // Check auto-save setting from localStorage
+      const autoSave = localStorage.getItem('autoSave') === 'true';
+
       const response = await axios.post(
-        "http://localhost:5000/api/optimize/with-weights",
+        "/api/portfolio/optimize/with-weights",
         {
           tickers: tickerArray,
           initial_weights: initialWeights,
           risk_factor: targetRisk,
           method: "quantum",
           period: "1y",
+          auto_save: autoSave,
         },
         {
           timeout: 300000,

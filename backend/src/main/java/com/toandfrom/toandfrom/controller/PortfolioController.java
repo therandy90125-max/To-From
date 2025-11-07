@@ -1,6 +1,7 @@
 package com.toandfrom.toandfrom.controller;
 
 import com.toandfrom.toandfrom.service.PortfolioOptimizationService;
+import com.toandfrom.toandfrom.service.PortfolioDataService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,9 +15,13 @@ import java.util.Map;
 public class PortfolioController {
 
     private final PortfolioOptimizationService portfolioService;
+    private final PortfolioDataService portfolioDataService;
 
-    public PortfolioController(PortfolioOptimizationService portfolioService) {
+    public PortfolioController(
+            PortfolioOptimizationService portfolioService,
+            PortfolioDataService portfolioDataService) {
         this.portfolioService = portfolioService;
+        this.portfolioDataService = portfolioDataService;
     }
 
     /**
@@ -31,6 +36,16 @@ public class PortfolioController {
                 ((Number) request.get("risk_factor")).doubleValue() : 0.5;
             String method = (String) request.getOrDefault("method", "classical");
             String period = (String) request.getOrDefault("period", "1y");
+            
+            // Check for auto-save flag
+            Boolean autoSave = false;
+            if (request.get("auto_save") != null) {
+                if (request.get("auto_save") instanceof Boolean) {
+                    autoSave = (Boolean) request.get("auto_save");
+                } else if (request.get("auto_save") instanceof String) {
+                    autoSave = Boolean.parseBoolean((String) request.get("auto_save"));
+                }
+            }
 
             if (tickers == null || tickers.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -40,6 +55,23 @@ public class PortfolioController {
             }
 
             Map<String, Object> result = portfolioService.optimizePortfolio(tickers, riskFactor, method, period);
+            
+            // Save to database if auto-save is enabled
+            if (Boolean.TRUE.equals(autoSave) && Boolean.TRUE.equals(result.get("success"))) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> resultData = (Map<String, Object>) result.get("result");
+                    if (resultData != null) {
+                        portfolioDataService.saveOptimizationResult(
+                            resultData, tickers, riskFactor, method, period, true
+                        );
+                    }
+                } catch (Exception e) {
+                    // Log error but don't fail the request
+                    System.err.println("Failed to save optimization result: " + e.getMessage());
+                }
+            }
+            
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
@@ -63,6 +95,16 @@ public class PortfolioController {
                 ((Number) request.get("risk_factor")).doubleValue() : 0.5;
             String method = (String) request.getOrDefault("method", "quantum");
             String period = (String) request.getOrDefault("period", "1y");
+            
+            // Check for auto-save flag
+            Boolean autoSave = false;
+            if (request.get("auto_save") != null) {
+                if (request.get("auto_save") instanceof Boolean) {
+                    autoSave = (Boolean) request.get("auto_save");
+                } else if (request.get("auto_save") instanceof String) {
+                    autoSave = Boolean.parseBoolean((String) request.get("auto_save"));
+                }
+            }
 
             if (tickers == null || tickers.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -81,6 +123,23 @@ public class PortfolioController {
             Map<String, Object> result = portfolioService.optimizeWithWeights(
                 tickers, initialWeights, riskFactor, method, period
             );
+            
+            // Save to database if auto-save is enabled
+            if (Boolean.TRUE.equals(autoSave) && Boolean.TRUE.equals(result.get("success"))) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> resultData = (Map<String, Object>) result.get("result");
+                    if (resultData != null) {
+                        portfolioDataService.saveOptimizationResult(
+                            resultData, tickers, riskFactor, method, period, true
+                        );
+                    }
+                } catch (Exception e) {
+                    // Log error but don't fail the request
+                    System.err.println("Failed to save optimization result: " + e.getMessage());
+                }
+            }
+            
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
