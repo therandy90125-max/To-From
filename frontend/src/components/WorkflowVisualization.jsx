@@ -10,6 +10,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { motion } from 'framer-motion';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // Custom node styles for actual application workflow
 const nodeStyle = {
@@ -160,6 +161,7 @@ const initialEdges = [
 ];
 
 const WorkflowVisualization = () => {
+  const { t } = useLanguage();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [activeNode, setActiveNode] = useState(null);
@@ -231,15 +233,15 @@ const WorkflowVisualization = () => {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-1">
-              🔄 Application Architecture & Workflow
+              🔄 {t('applicationArchitecture')}
             </h1>
             <p className="text-sm text-gray-600">
-              Real-time visualization of ToAndFrom system components and data flow
+              {t('workflowDescription')}
             </p>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-sm">
-              <span className="font-semibold text-gray-700">Status: </span>
+              <span className="font-semibold text-gray-700">{t('status')}: </span>
               <span
                 className={`px-4 py-2 rounded-full text-white font-semibold ${
                   workflowStatus === 'idle'
@@ -250,10 +252,10 @@ const WorkflowVisualization = () => {
                 }`}
               >
                 {workflowStatus === 'idle'
-                  ? 'Ready'
+                  ? t('ready')
                   : workflowStatus === 'running'
-                  ? 'Running...'
-                  : 'Completed ✓'}
+                  ? t('running')
+                  : `${t('completed')} ✓`}
               </span>
             </div>
             <button
@@ -265,7 +267,7 @@ const WorkflowVisualization = () => {
                   : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white hover:shadow-xl transform hover:scale-105'
               }`}
             >
-              {workflowStatus === 'running' ? '⏳ Running...' : '▶ Simulate Workflow'}
+              {workflowStatus === 'running' ? `⏳ ${t('running')}` : `▶ ${t('simulateWorkflow')}`}
             </button>
           </div>
         </div>
@@ -305,13 +307,13 @@ const WorkflowVisualization = () => {
         className="bg-white border-t-2 border-gray-200 shadow-lg"
       >
         <div className="max-w-7xl mx-auto p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">System Components Legend</h3>
+          <h3 className="text-lg font-bold text-gray-800 mb-4">{t('systemComponentsLegend')}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {/* Frontend Layer */}
             <div className="bg-blue-50 border-2 border-blue-500 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-full bg-blue-500"></div>
-                <span className="font-bold text-blue-900">Frontend Layer</span>
+                <span className="font-bold text-blue-900">{t('frontendLayer')}</span>
               </div>
               <p className="text-xs text-blue-700 ml-8">React + Vite (Port 5173)</p>
             </div>
@@ -320,7 +322,7 @@ const WorkflowVisualization = () => {
             <div className="bg-green-50 border-2 border-green-500 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-full bg-green-500"></div>
-                <span className="font-bold text-green-900">API Gateway</span>
+                <span className="font-bold text-green-900">{t('apiGateway')}</span>
               </div>
               <p className="text-xs text-green-700 ml-8">Spring Boot (Port 8080)</p>
             </div>
@@ -329,7 +331,7 @@ const WorkflowVisualization = () => {
             <div className="bg-pink-50 border-2 border-pink-500 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-full bg-pink-500"></div>
-                <span className="font-bold text-pink-900">Processing Engine</span>
+                <span className="font-bold text-pink-900">{t('processingEngine')}</span>
               </div>
               <p className="text-xs text-pink-700 ml-8">Flask + Qiskit (Port 5000)</p>
             </div>
@@ -338,7 +340,7 @@ const WorkflowVisualization = () => {
             <div className="bg-amber-50 border-2 border-amber-500 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-full bg-amber-500"></div>
-                <span className="font-bold text-amber-900">Data Layer</span>
+                <span className="font-bold text-amber-900">{t('dataLayer')}</span>
               </div>
               <p className="text-xs text-amber-700 ml-8">H2/MariaDB + yfinance</p>
             </div>
@@ -346,27 +348,27 @@ const WorkflowVisualization = () => {
 
           {/* Data Flow */}
           <div className="mt-4 pt-4 border-t border-gray-200">
-            <h4 className="text-sm font-bold text-gray-700 mb-2">Data Flow Types:</h4>
+            <h4 className="text-sm font-bold text-gray-700 mb-2">{t('dataFlowTypes')}</h4>
             <div className="flex flex-wrap gap-4 text-xs">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-1 bg-blue-500"></div>
-                <span className="text-gray-700">HTTP Request</span>
+                <span className="text-gray-700">{t('httpRequest')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-1 bg-green-500"></div>
-                <span className="text-gray-700">Response Data</span>
+                <span className="text-gray-700">{t('responseData')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-1 bg-amber-500"></div>
-                <span className="text-gray-700">Database I/O</span>
+                <span className="text-gray-700">{t('databaseIO')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-1 bg-amber-500" style={{ backgroundImage: 'repeating-linear-gradient(90deg, #f59e0b, #f59e0b 5px, transparent 5px, transparent 10px)' }}></div>
-                <span className="text-gray-700">Async/Cache</span>
+                <span className="text-gray-700">{t('asyncCache')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-full bg-yellow-200 border-2 border-yellow-500 animate-pulse"></div>
-                <span className="text-gray-700 font-semibold">Active Component</span>
+                <span className="text-gray-700 font-semibold">{t('activeComponent')}</span>
               </div>
             </div>
           </div>

@@ -86,12 +86,10 @@ const EnhancedCharts = () => {
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
             <div className="text-6xl mb-4">📈</div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              {language === 'ko' ? '최적화 데이터 없음' : 'No Optimization Data'}
+              {t('noOptimizationData')}
             </h2>
             <p className="text-gray-600 mb-6">
-              {language === 'ko' 
-                ? '먼저 포트폴리오 최적화를 실행해주세요. 최적화 결과가 여기에 시각화됩니다.' 
-                : 'Please run a portfolio optimization first. Results will be visualized here.'}
+              {t('pleaseRunOptimization')}
             </p>
             <a
               href="#"
@@ -153,12 +151,10 @@ const EnhancedCharts = () => {
         className="max-w-7xl mx-auto mb-6"
       >
         <h1 className="text-3xl font-bold text-gray-800 mb-2">
-          📊 {language === 'ko' ? '포트폴리오 분석' : 'Portfolio Analytics'}
+          📊 {t('portfolioAnalytics')}
         </h1>
         <p className="text-gray-600">
-          {language === 'ko' 
-            ? `최적화 방법: ${method === 'quantum' ? '양자 최적화' : '고전 최적화'} | 실행 시간: ${new Date(timestamp).toLocaleString()}` 
-            : `Method: ${method === 'quantum' ? 'Quantum Optimization' : 'Classical Optimization'} | Executed: ${new Date(timestamp).toLocaleString()}`}
+          {t('methodUsed')}: {method === 'quantum' ? t('quantumOptimization') : t('classicalOptimization')} | {t('executedAt')}: {new Date(timestamp).toLocaleString()}
         </p>
       </motion.div>
 
@@ -172,7 +168,7 @@ const EnhancedCharts = () => {
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold opacity-90">
-              {language === 'ko' ? '기대 수익률' : 'Expected Return'}
+              {t('expectedReturnAnnual')}
             </span>
             <span className="text-3xl">📈</span>
           </div>
@@ -180,14 +176,14 @@ const EnhancedCharts = () => {
             +{(result.expected_return * 100).toFixed(2)}%
           </div>
           <div className="text-sm opacity-75 mt-1">
-            {language === 'ko' ? '연간 예상' : 'Annual Expected'}
+            {t('annualExpected')}
           </div>
         </div>
 
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold opacity-90">
-              {language === 'ko' ? '포트폴리오 리스크' : 'Portfolio Risk'}
+              {t('portfolioRisk')}
             </span>
             <span className="text-3xl">⚠️</span>
           </div>
@@ -195,14 +191,14 @@ const EnhancedCharts = () => {
             {(result.risk * 100).toFixed(2)}%
           </div>
           <div className="text-sm opacity-75 mt-1">
-            {language === 'ko' ? '변동성' : 'Volatility'}
+            {t('volatility')}
           </div>
         </div>
 
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold opacity-90">
-              {language === 'ko' ? '샤프 비율' : 'Sharpe Ratio'}
+              {t('sharpeRatioLabel')}
             </span>
             <span className="text-3xl">🎯</span>
           </div>
@@ -211,10 +207,10 @@ const EnhancedCharts = () => {
           </div>
           <div className="text-sm opacity-75 mt-1">
             {result.sharpe_ratio > 1.5 
-              ? (language === 'ko' ? '우수함' : 'Excellent')
+              ? t('excellent')
               : result.sharpe_ratio > 1 
-                ? (language === 'ko' ? '양호함' : 'Good')
-                : (language === 'ko' ? '보통' : 'Average')}
+                ? t('good')
+                : t('average')}
           </div>
         </div>
       </motion.div>
@@ -230,7 +226,7 @@ const EnhancedCharts = () => {
             className="bg-white rounded-xl shadow-lg p-6"
           >
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              🎯 {language === 'ko' ? '기존 vs 최적화 비중' : 'Original vs Optimized Weights'}
+              🎯 {t('originalVsOptimized')}
             </h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={weightsComparisonData}>
@@ -242,14 +238,14 @@ const EnhancedCharts = () => {
                 <Bar
                   dataKey="original"
                   fill="#9ca3af"
-                  name={language === 'ko' ? '기존 (%)' : 'Original (%)'}
+                  name={t('originalWeight')}
                   radius={[8, 8, 0, 0]}
                   animationDuration={1000}
                 />
                 <Bar
                   dataKey="optimized"
                   fill="#3b82f6"
-                  name={language === 'ko' ? '최적화 (%)' : 'Optimized (%)'}
+                  name={t('optimizedWeight')}
                   radius={[8, 8, 0, 0]}
                   animationDuration={1000}
                   animationBegin={500}
@@ -268,7 +264,7 @@ const EnhancedCharts = () => {
           className="bg-white rounded-xl shadow-lg p-6"
         >
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            📊 {language === 'ko' ? '리스크 지표 분석' : 'Risk Metrics Analysis'}
+            📊 {t('riskMetricsAnalysis')}
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={metricsData}>
@@ -314,7 +310,7 @@ const EnhancedCharts = () => {
           className="bg-white rounded-xl shadow-lg p-6 lg:col-span-2"
         >
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            🥧 {language === 'ko' ? '최적화된 포트폴리오 분포' : 'Optimized Portfolio Distribution'}
+            🥧 {t('optimizedDistribution')}
           </h3>
           <div className="flex flex-col md:flex-row items-center justify-center gap-8">
             <ResponsiveContainer width="100%" height={350} className="md:w-1/2">
