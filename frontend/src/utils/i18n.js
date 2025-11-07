@@ -221,6 +221,26 @@ export const translations = {
     optimizedWeight: "Optimized (%)",
     riskMetricsAnalysis: "Risk Metrics Analysis",
     optimizedDistribution: "Optimized Portfolio Distribution",
+    
+    // Dashboard - New Portfolio Management
+    portfolioOverview: "Portfolio Overview",
+    totalReturn: "Total Return",
+    holdings: "Holdings",
+    stocks: "stocks",
+    currentHoldings: "Current Holdings",
+    stock: "Stock",
+    shares: "Shares",
+    avgPrice: "Avg Price",
+    value: "Value",
+    actions: "Actions",
+    noStocks: "No stocks in portfolio",
+    addStocksToStart: "Add stocks to get started",
+    portfolioDistribution: "Portfolio Distribution",
+    addStocksToSeeDistribution: "Add stocks to see distribution",
+    readyToOptimize: "Ready to Optimize?",
+    optimizePortfolioDesc: "Use quantum computing to find the optimal portfolio allocation",
+    optimizeMyPortfolio: "Optimize My Portfolio",
+    needAtLeast2Stocks: "Need at least 2 stocks to optimize",
   },
   ko: {
     // Navigation
@@ -450,6 +470,26 @@ export const translations = {
     optimizedWeight: "최적화 (%)",
     riskMetricsAnalysis: "리스크 지표 분석",
     optimizedDistribution: "최적화된 포트폴리오 분포",
+    
+    // Dashboard - New Portfolio Management
+    portfolioOverview: "포트폴리오 현황",
+    totalReturn: "총 수익",
+    holdings: "보유 종목",
+    stocks: "종목",
+    currentHoldings: "현재 보유 종목",
+    stock: "주식",
+    shares: "보유 수량",
+    avgPrice: "평균 단가",
+    value: "평가액",
+    actions: "액션",
+    noStocks: "포트폴리오에 주식이 없습니다",
+    addStocksToStart: "주식을 추가하여 시작하세요",
+    portfolioDistribution: "포트폴리오 분포",
+    addStocksToSeeDistribution: "주식을 추가하면 분포를 볼 수 있습니다",
+    readyToOptimize: "최적화 준비 완료?",
+    optimizePortfolioDesc: "양자 컴퓨팅을 사용하여 최적의 포트폴리오 배분을 찾으세요",
+    optimizeMyPortfolio: "내 포트폴리오 최적화",
+    needAtLeast2Stocks: "최적화하려면 최소 2개 이상의 주식이 필요합니다",
   }
 };
 
