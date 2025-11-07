@@ -1,207 +1,132 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from "../contexts/LanguageContext";
+import { useOptimization } from '../hooks/useOptimization';
+import { parseTickers, validateTickers, formatPercent } from '../utils/portfolioUtils';
 import StockPriceWidget from './StockPriceWidget';
 import StockSearchInput from './StockSearchInput';
 
-const Dashboard = () => {
+const DashboardRefactored = () => {
   const { t } = useLanguage();
   
-  // States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
+  // Stock management
   const [stocks, setStocks] = useState([
     { 
       ticker: 'AAPL', 
       name: 'Apple Inc.', 
       market: t('foreign'),
-      price: '250,000',
       shares: 10 
     },
     { 
       ticker: '005930.KS', 
       name: 'Samsung Electronics', 
       market: t('domestic'),
-      price: '75,000',
       shares: 0 
     }
   ]);
-  const [investmentAmount, setInvestmentAmount] = useState(t('autoCalculate'));
+
+  // Optimization settings
   const [riskLevel, setRiskLevel] = useState(5);
-  const [optimizationMethod, setOptimizationMethod] = useState('QAOA');
+  const [optimizationMethod, setOptimizationMethod] = useState('classical');
   const [period, setPeriod] = useState('1y');
-  const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  // Search stocks with debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery.length >= 2) {
-        searchStocks(searchQuery);
-      } else {
-        setSearchResults([]);
-        setShowDropdown(false);
-      }
-    }, 300);
+  // Use optimization hook
+  const { result: results, loading, error, optimizeWithWeights } = useOptimization();
 
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  const searchStocks = async (query) => {
-    try {
-      console.log('Searching for:', query);
-      const response = await fetch(`http://localhost:8080/api/stocks/search?q=${query}`);
-      const data = await response.json();
-      console.log('API Response:', data);
-      
-      if (data.success && data.results) {
-        console.log('Found results:', data.results.length);
-        setSearchResults(data.results);
-        setShowDropdown(data.results.length > 0);
-      } else {
-        console.log('No results or failed');
-        setSearchResults([]);
-        setShowDropdown(false);
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-      setSearchResults([]);
-    }
-  };
-
-  const addStockFromSearch = (result) => {
-    // Check if stock already exists
-    const exists = stocks.some(s => s.ticker === result.ticker);
+  // Add stock from search
+  const handleSelectStock = (stock) => {
+    const exists = stocks.some(s => s.ticker === stock.ticker || s.ticker === stock.symbol);
     if (!exists) {
       setStocks([...stocks, {
-        ticker: result.ticker,
-        name: result.name,
-        market: result.exchange.includes('KS') || result.exchange.includes('KRX') ? t('domestic') : t('foreign'),
-        price: t('priceChecking'),
+        ticker: stock.ticker || stock.symbol,
+        name: stock.name,
+        market: (stock.exchange?.includes('KS') || stock.exchange?.includes('KRX')) ? t('domestic') : t('foreign'),
         shares: 0
       }]);
     }
-    setSearchQuery('');
-    setShowDropdown(false);
   };
 
+  // Update shares
   const updateShares = (index, value) => {
     const newStocks = [...stocks];
     newStocks[index].shares = parseInt(value) || 0;
     setStocks(newStocks);
   };
 
+  // Remove stock
   const removeStock = (index) => {
-    const newStocks = stocks.filter((_, idx) => idx !== index);
-    setStocks(newStocks);
+    setStocks(stocks.filter((_, idx) => idx !== index));
   };
 
+  // Handle optimization
   const handleOptimize = async () => {
-    // Validate stocks: filter out invalid tickers
-    const validStocks = stocks.filter(s => s.ticker && s.ticker.trim() !== '');
+    // 1. Extract tickers and calculate weights
+    const validStocks = stocks.filter(s => s.shares > 0);
     
-    if (validStocks.length < 2) {
-      alert(t('minimumTwoStocks'));
+    if (validStocks.length === 0) {
+      alert(t('pleaseEnterShares') || '최소 한 종목의 보유 수량을 입력해주세요.');
       return;
     }
 
-    setLoading(true);
-    try {
-      // Calculate initial weights based on shares
-      const totalShares = validStocks.reduce((sum, s) => sum + s.shares, 0);
-      const initialWeights = validStocks.map(s => 
-        totalShares > 0 ? s.shares / totalShares : 1.0 / validStocks.length
-      );
+    const tickerArray = validStocks.map(s => s.ticker);
+    const totalShares = validStocks.reduce((sum, s) => sum + s.shares, 0);
+    const weightArray = validStocks.map(s => s.shares / totalShares);
 
-      console.log('Optimization request:', {
-        tickers: validStocks.map(s => s.ticker),
-        initial_weights: initialWeights,
-        period: period,
-        risk_factor: riskLevel / 10,
-        method: optimizationMethod.toLowerCase() === 'qaoa' ? 'quantum' : 'classical'
-      });
-
-      const response = await fetch('http://localhost:8080/api/portfolio/optimize/with-weights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tickers: validStocks.map(s => s.ticker),
-          initial_weights: initialWeights,
-          period: period,
-          risk_factor: riskLevel / 10,
-          method: optimizationMethod.toLowerCase() === 'qaoa' ? 'quantum' : 'classical',
-          auto_save: false
-        })
-      });
-      
-      const data = await response.json();
-      console.log('Optimization response:', data);
-      
-      if (data.success) {
-        setResults(data.result.optimized);
-        alert(t('optimizationSuccess'));
-      } else {
-        alert(t('optimizationFailedMsg') + ': ' + (data.error || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Optimization error:', error);
-      alert(t('optimizationFailedMsg') + ': ' + error.message);
-    } finally {
-      setLoading(false);
+    // 2. Validate
+    const validation = validateTickers(tickerArray);
+    if (!validation.isValid) {
+      alert(validation.error);
+      return;
     }
+
+    // 3. Optimize using hook
+    const riskFactor = riskLevel / 10; // Convert 1-10 to 0.0-1.0
+    await optimizeWithWeights(
+      tickerArray,
+      weightArray,
+      riskFactor,
+      optimizationMethod,
+      period
+    );
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-6">
       <div className="max-w-7xl mx-auto">
-        
-        {/* Stock Search Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">
+            📊 {t('dashboard')}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300">
+            {t('dashboardSubtitle') || 'Qiskit을 활용한 포트폴리오 최적화'}
+          </p>
+        </div>
+
+        {/* Stock Search */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">🔍</span>
-            <h2 className="text-xl font-bold text-gray-800">{t('stockSearch')}</h2>
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">{t('stockSearch')}</h2>
           </div>
           
-          <div className="relative">
-            <input 
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('searchStockPlaceholder')}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-            />
-            
-            {/* Search Dropdown */}
-            {showDropdown && searchResults.length > 0 && (
-              <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                {searchResults.map((result, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => addStockFromSearch(result)}
-                    className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 transition"
-                  >
-                    <span className="font-semibold text-blue-600">{result.ticker}</span>
-                    <span className="text-gray-700 ml-2">{result.name}</span>
-                    <span className="text-gray-400 ml-2 text-sm">({result.exchange})</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <StockSearchInput
+            onSelectStock={handleSelectStock}
+            placeholder={t('searchStockPlaceholder')}
+            className="w-full"
+          />
         </div>
 
         {/* Stock Input Table */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">📊</span>
-            <h2 className="text-xl font-bold text-gray-800">{t('stockInput')}</h2>
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">{t('stockInput')}</h2>
           </div>
           
           {/* Table Header */}
-          <div className="grid grid-cols-6 gap-4 mb-3 pb-2 border-b-2 border-gray-200 font-semibold text-gray-700 text-sm">
+          <div className="grid grid-cols-5 gap-4 mb-3 pb-2 border-b-2 border-gray-200 dark:border-gray-700 font-semibold text-gray-700 dark:text-gray-300 text-sm">
             <div>{t('tickerCode')}</div>
             <div>{t('stockName')}</div>
-            <div>{t('market')}</div>
             <div>{t('currentPrice')}</div>
             <div>{t('holdingShares')}</div>
             <div>{t('delete')}</div>
@@ -209,31 +134,15 @@ const Dashboard = () => {
           
           {/* Stock Rows */}
           {stocks.map((stock, idx) => (
-            <div key={idx} className="grid grid-cols-6 gap-4 items-center py-3 border-b border-gray-100">
-              <input 
-                value={stock.ticker} 
-                readOnly 
-                className="p-2 bg-gray-50 border border-gray-200 rounded text-sm font-mono font-semibold"
-              />
-              <input 
-                value={stock.name} 
-                readOnly 
-                className="p-2 bg-gray-50 border border-gray-200 rounded text-sm"
-              />
-              <select 
-                value={stock.market}
-                onChange={(e) => {
-                  const newStocks = [...stocks];
-                  newStocks[idx].market = e.target.value;
-                  setStocks(newStocks);
-                }}
-                className="p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-              >
-                <option>{t('foreign')}</option>
-                <option>{t('domestic')}</option>
-              </select>
-              {/* Real-time Price Widget */}
-              <div className="flex items-center">
+            <div key={idx} className="grid grid-cols-5 gap-4 items-center py-3 border-b border-gray-100 dark:border-gray-700">
+              <div className="font-mono font-semibold text-gray-800 dark:text-white">
+                {stock.ticker}
+              </div>
+              <div className="text-gray-700 dark:text-gray-300">
+                {stock.name}
+              </div>
+              {/* Real-time Price */}
+              <div>
                 <StockPriceWidget symbol={stock.ticker} showDetails={false} />
               </div>
               <input 
@@ -242,7 +151,9 @@ const Dashboard = () => {
                 value={stock.shares}
                 onChange={(e) => updateShares(idx, e.target.value)}
                 placeholder={t('sharesPlaceholder')}
-                className="p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                className="p-2 border border-gray-300 dark:border-gray-600 rounded text-sm 
+                         bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                         focus:ring-2 focus:ring-blue-500"
               />
               <button
                 onClick={() => removeStock(idx)}
@@ -254,7 +165,7 @@ const Dashboard = () => {
           ))}
           
           {stocks.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <p className="text-lg mb-2">{t('searchToAddStocks')}</p>
               <p className="text-sm">{t('searchInBoxAbove')}</p>
             </div>
@@ -262,27 +173,13 @@ const Dashboard = () => {
         </div>
 
         {/* Optimization Settings */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
           <div className="grid grid-cols-2 gap-6">
             
-            {/* Investment Amount */}
-            <div>
-              <label className="block mb-2 font-semibold text-gray-700">
-                {t('investmentAmountWon')}
-              </label>
-              <input
-                type="text"
-                value={investmentAmount}
-                onChange={(e) => setInvestmentAmount(e.target.value)}
-                placeholder={t('autoCalculate')}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
             {/* Risk Level */}
             <div>
-              <label className="block mb-2 font-semibold text-gray-700">
-                {t('riskLevel1to10')}
+              <label className="block mb-2 font-semibold text-gray-700 dark:text-gray-300">
+                {t('riskLevel1to10')}: {riskLevel}
               </label>
               <input
                 type="number"
@@ -290,34 +187,40 @@ const Dashboard = () => {
                 max="10"
                 value={riskLevel}
                 onChange={(e) => setRiskLevel(parseInt(e.target.value))}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg 
+                         bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                         focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             {/* Optimization Method */}
             <div>
-              <label className="block mb-2 font-semibold text-gray-700">
+              <label className="block mb-2 font-semibold text-gray-700 dark:text-gray-300">
                 {t('optimizationMethodLabel')}
               </label>
               <select 
                 value={optimizationMethod}
                 onChange={(e) => setOptimizationMethod(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg
+                         bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                         focus:ring-2 focus:ring-blue-500"
               >
-                <option value="QAOA">{t('qaoaMethod')}</option>
-                <option value="QMVS">{t('qmvsMethod')}</option>
+                <option value="classical">{t('classicalMethod')}</option>
+                <option value="quantum">{t('qaoaMethod')}</option>
               </select>
             </div>
 
             {/* Period */}
-            <div>
-              <label className="block mb-2 font-semibold text-gray-700">
+            <div className="col-span-2">
+              <label className="block mb-2 font-semibold text-gray-700 dark:text-gray-300">
                 {t('dataPeriodLabel')}
               </label>
               <select 
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg
+                         bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                         focus:ring-2 focus:ring-blue-500"
               >
                 <option value="1mo">{t('oneMonthPeriod')}</option>
                 <option value="3mo">{t('threeMonthsPeriod')}</option>
@@ -343,41 +246,55 @@ const Dashboard = () => {
           </button>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+            <h3 className="text-red-800 dark:text-red-200 font-semibold mb-2">❌ {t('error')}</h3>
+            <p className="text-red-700 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
         {/* Results Section */}
         {results && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">{t('optimizationResults')}</h2>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="p-4 bg-blue-50 rounded">
-                <p className="text-sm text-gray-600">{t('expectedReturnPercent')}</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {(results.expected_return * 100).toFixed(2)}%
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+              {t('optimizationResults')}
+            </h2>
+            
+            {/* Performance Metrics */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded">
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('expectedReturnPercent')}</p>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {formatPercent(results.optimized?.expected_return || results.expected_return)}
                 </p>
               </div>
-              <div className="p-4 bg-red-50 rounded">
-                <p className="text-sm text-gray-600">{t('riskPercent')}</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {(results.risk * 100).toFixed(2)}%
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded">
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('riskPercent')}</p>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  {formatPercent(results.optimized?.risk || results.risk)}
                 </p>
               </div>
-              <div className="p-4 bg-green-50 rounded">
-                <p className="text-sm text-gray-600">{t('sharpeRatioLabel')}</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {results.sharpe_ratio?.toFixed(2) || 'N/A'}
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded">
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('sharpeRatioLabel')}</p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  {((results.optimized?.sharpe_ratio || results.sharpe_ratio) || 0).toFixed(2)}
                 </p>
               </div>
             </div>
 
             {/* Optimized Weights */}
-            {results.weights && results.tickers && (
+            {(results.optimized || results).weights && (results.optimized || results).tickers && (
               <div className="mt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">{t('optimizedWeights')}</h3>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">
+                  {t('optimizedWeights')}
+                </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {results.tickers.map((ticker, idx) => (
-                    <div key={idx} className="p-3 bg-gray-50 rounded flex justify-between items-center">
-                      <span className="font-medium text-gray-700">{ticker}</span>
-                      <span className="text-indigo-600 font-semibold">
-                        {(results.weights[idx] * 100).toFixed(2)}%
+                  {(results.optimized || results).tickers.map((ticker, idx) => (
+                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-700 rounded flex justify-between items-center">
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{ticker}</span>
+                      <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                        {formatPercent((results.optimized || results).weights[idx], 1)}
                       </span>
                     </div>
                   ))}
@@ -386,10 +303,10 @@ const Dashboard = () => {
             )}
           </div>
         )}
-
       </div>
     </div>
   );
 };
 
-export default Dashboard;
+export default DashboardRefactored;
+

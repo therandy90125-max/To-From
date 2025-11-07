@@ -1,37 +1,73 @@
 import { useState } from "react";
-import { useOptimization } from '../hooks/useOptimization';
-import { 
-  parseTickers, 
-  validateTickers, 
-  getRiskLevelText, 
-  getMethodText,
-  formatPercent 
-} from '../utils/portfolioUtils';
+import axios from "axios";
 import StockPriceWidget from './StockPriceWidget';
 
 export default function PortfolioOptimizer() {
-  // UI State
   const [tickers, setTickers] = useState("AAPL,GOOGL,MSFT");
   const [riskFactor, setRiskFactor] = useState(0.5);
   const [method, setMethod] = useState("classical");
   const [period, setPeriod] = useState("1y");
-
-  // Use custom hook for optimization logic
-  const { result, loading, error, optimizePortfolio } = useOptimization();
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleOptimize = async () => {
-    // 1. Parse tickers
-    const tickerArray = parseTickers(tickers);
-    
-    // 2. Validate
-    const validation = validateTickers(tickerArray);
-    if (!validation.isValid) {
-      alert(validation.error);
-      return;
-    }
+    try {
+      setLoading(true);
+      setError(null);
+      setResult(null);
 
-    // 3. Optimize (hook handles all API logic)
-    await optimizePortfolio(tickerArray, riskFactor, method, period);
+      const tickerArray = tickers
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+
+      if (tickerArray.length === 0) {
+        setError("최소 하나의 주식 티커를 입력해주세요.");
+        setLoading(false);
+        return;
+      }
+
+      // 양자 최적화는 시간이 오래 걸릴 수 있으므로 타임아웃을 길게 설정
+      const timeout = method === "quantum" ? 300000 : 60000; // 양자: 5분, 고전적: 1분
+      
+      // Check auto-save setting from localStorage
+      const autoSave = localStorage.getItem('autoSave') === 'true';
+      
+      const response = await axios.post(
+        "/api/portfolio/optimize",
+        {
+          tickers: tickerArray,
+          risk_factor: riskFactor,
+          method: method,
+          period: period,
+          auto_save: autoSave,
+        },
+        {
+          timeout: timeout,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setResult(response.data.result);
+      } else {
+        setError(response.data.error || "최적화에 실패했습니다.");
+      }
+    } catch (err) {
+      console.error("Optimization error:", err);
+      if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.message) {
+        setError(`요청 실패: ${err.message}`);
+      } else {
+        setError("최적화 요청에 실패했습니다. 서버가 실행 중인지 확인해주세요.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,7 +77,6 @@ export default function PortfolioOptimizer() {
         <p className="subtitle">Qiskit을 활용한 포트폴리오 최적화</p>
 
         <div className="form-section">
-          {/* Tickers Input */}
           <div className="form-group">
             <label htmlFor="tickers" className="label">
               주식 티커 (쉼표로 구분):
@@ -58,23 +93,25 @@ export default function PortfolioOptimizer() {
             <small className="hint">
               주식 티커를 쉼표로 구분하여 입력하세요 (한국 주식: 005930, 미국 주식: AAPL)
             </small>
-            
             {/* Real-time Price Preview */}
             {tickers && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {parseTickers(tickers).map((ticker, idx) => (
-                  <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2 shadow-sm">
-                    <StockPriceWidget symbol={ticker} showDetails={false} />
-                  </div>
-                ))}
+                {tickers.split(',').map((ticker, idx) => {
+                  const trimmedTicker = ticker.trim();
+                  if (!trimmedTicker) return null;
+                  return (
+                    <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2 shadow-sm">
+                      <StockPriceWidget symbol={trimmedTicker} showDetails={false} />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Risk Factor Slider */}
           <div className="form-group">
             <label htmlFor="riskFactor" className="label">
-              리스크 팩터: {riskFactor} ({getRiskLevelText(riskFactor)})
+              리스크 팩터: {riskFactor}
             </label>
             <input
               id="riskFactor"
@@ -93,7 +130,6 @@ export default function PortfolioOptimizer() {
             </div>
           </div>
 
-          {/* Method Selection */}
           <div className="form-group">
             <label htmlFor="method" className="label">
               최적화 방법:
@@ -110,7 +146,6 @@ export default function PortfolioOptimizer() {
             </select>
           </div>
 
-          {/* Period Selection */}
           <div className="form-group">
             <label htmlFor="period" className="label">
               데이터 기간:
@@ -129,7 +164,6 @@ export default function PortfolioOptimizer() {
             </select>
           </div>
 
-          {/* Optimize Button */}
           <button
             onClick={handleOptimize}
             disabled={loading}
@@ -139,7 +173,6 @@ export default function PortfolioOptimizer() {
           </button>
         </div>
 
-        {/* Error Display */}
         {error && (
           <div className="error-box">
             <h3>❌ 오류</h3>
@@ -147,61 +180,86 @@ export default function PortfolioOptimizer() {
           </div>
         )}
 
-        {/* Results Display */}
         {result && (
           <div className="result-box">
             <h3>✅ 최적화 결과</h3>
             
-            {/* Selected Stocks */}
             <div className="result-section">
               <h4>선택된 주식</h4>
               <div className="ticker-list">
-                {result.selected_tickers?.map((ticker, index) => (
+                {result.selected_tickers.map((ticker, index) => (
                   <span key={ticker} className="ticker-badge">
-                    {ticker} ({formatPercent(result.weights[index] || 0, 1)})
+                    {ticker} ({((result.weights[index] || 0) * 100).toFixed(1)}%)
                   </span>
                 ))}
               </div>
             </div>
 
-            {/* Performance Metrics */}
             <div className="result-grid">
               <div className="result-item">
                 <span className="result-label">예상 수익률</span>
                 <span className="result-value positive">
-                  {formatPercent(result.expected_return)}
+                  {(result.expected_return * 100).toFixed(2)}%
                 </span>
               </div>
               <div className="result-item">
                 <span className="result-label">리스크</span>
                 <span className="result-value">
-                  {formatPercent(result.risk)}
+                  {(result.risk * 100).toFixed(2)}%
                 </span>
               </div>
               <div className="result-item">
                 <span className="result-label">샤프 비율</span>
                 <span className="result-value">
-                  {result.sharpe_ratio?.toFixed(2)}
+                  {result.sharpe_ratio.toFixed(2)}
                 </span>
               </div>
               <div className="result-item">
                 <span className="result-label">최적화 방법</span>
                 <span className="result-value">
-                  {getMethodText(result.method)}
+                  {result.method === "classical" ? "고전적" : "양자 (QAOA)"}
                 </span>
               </div>
             </div>
 
-            {/* Quantum Verification (if quantum method) */}
             {result.method === "quantum" && result.quantum_verified && (
-              <div className="result-section quantum-section">
-                <h4>🔬 양자 최적화 확인</h4>
-                <p>✅ QAOA 알고리즘이 성공적으로 실행되었습니다!</p>
+              <div className="result-section" style={{ marginTop: "1rem", padding: "1rem", background: "#e8f5e9", borderRadius: "8px", border: "2px solid #4caf50" }}>
+                <h4 style={{ color: "#2e7d32", marginBottom: "0.5rem" }}>🔬 양자 최적화 확인</h4>
+                <p style={{ color: "#1b5e20", marginBottom: "0.5rem" }}>
+                  ✅ QAOA 알고리즘이 성공적으로 실행되었습니다!
+                </p>
                 {result.optimization_value && (
-                  <p>최적화 값: {result.optimization_value.toFixed(6)}</p>
+                  <p style={{ color: "#1b5e20", fontSize: "0.9rem" }}>
+                    최적화 값: {result.optimization_value.toFixed(6)}
+                  </p>
+                )}
+                {result.solution_vector && (
+                  <p style={{ color: "#1b5e20", fontSize: "0.9rem" }}>
+                    최적해 벡터: [{result.solution_vector.map(v => v.toFixed(1)).join(", ")}]
+                  </p>
+                )}
+                {result.reps && (
+                  <p style={{ color: "#1b5e20", fontSize: "0.9rem" }}>
+                    QAOA Reps: {result.reps}
+                  </p>
                 )}
               </div>
             )}
+
+            {result.method === "classical" && (
+              <div className="result-section" style={{ marginTop: "1rem", padding: "1rem", background: "#fff3e0", borderRadius: "8px", border: "2px solid #ff9800" }}>
+                <p style={{ color: "#e65100", fontSize: "0.9rem" }}>
+                  ℹ️ 고전적 최적화 (NumPy)를 사용했습니다.
+                </p>
+              </div>
+            )}
+
+            <details className="json-details">
+              <summary>전체 결과 (JSON)</summary>
+              <pre className="json-output">
+                {JSON.stringify(result, null, 2)}
+              </pre>
+            </details>
           </div>
         )}
       </div>
