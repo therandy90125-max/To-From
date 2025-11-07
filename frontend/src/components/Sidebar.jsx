@@ -24,13 +24,11 @@ export default function Sidebar({ currentPage, onPageChange, onLanguageChange })
       <div className="sidebar-header">
         <div className="logo-container">
           <img 
-            src="/quantafolio-logo.svg" 
-            alt="QuantaFolio Logo" 
+            src="/quantafolio-logo.png" 
+            alt="QuantaFolio Navigator" 
             className="sidebar-logo-image"
           />
-          <h2 className="sidebar-logo">QuantaFolio</h2>
         </div>
-        <p className="sidebar-subtitle">NAVIGATOR</p>
       </div>
       <nav className="sidebar-nav">
         {menuItems.map((item) => (
