@@ -1,331 +1,386 @@
-import { useState } from "react";
-import { useLanguage } from "../contexts/LanguageContext";
-import StockSearchInput from "./StockSearchInput";
-import axios from "axios";
+import React, { useState, useEffect } from 'react';
 
-export default function Dashboard({ onNavigateToOptimizer }) {
-  const { t } = useLanguage();
-  const [portfolioValue, setPortfolioValue] = useState(125430);
-  const [portfolioReturn, setPortfolioReturn] = useState(12.34);
-  const [optimizationResult, setOptimizationResult] = useState(null);
-  const [targetRisk, setTargetRisk] = useState(0.15);
-  const [optimizing, setOptimizing] = useState(false);
-  const [optimizationMethod, setOptimizationMethod] = useState('quantum'); // quantum or classical
-  
-  // 주식 목록 관리
-  const [stocks, setStocks] = useState([]);
-
-  const handleAddStock = (stock) => {
-    // 이미 추가된 주식인지 확인
-    if (stocks.find(s => s.ticker === stock.ticker)) {
-      alert(`${stock.ticker}는 이미 추가되었습니다.`);
-      return;
+const Dashboard = () => {
+  // States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [stocks, setStocks] = useState([
+    { 
+      ticker: 'AAPL', 
+      name: 'Apple Inc.', 
+      market: '해외',
+      price: '250,000',
+      shares: 10 
+    },
+    { 
+      ticker: '005930.KS', 
+      name: 'Samsung Electronics', 
+      market: '국내',
+      price: '75,000',
+      shares: 0 
     }
-    
-    setStocks([...stocks, {
-      ticker: stock.ticker,
-      name: stock.name,
-      exchange: stock.exchange,
-      shares: 0,
-      price: 0, // TODO: 실시간 가격 API 연동
-      value: 0
-    }]);
-  };
+  ]);
+  const [investmentAmount, setInvestmentAmount] = useState('자동 계산');
+  const [riskLevel, setRiskLevel] = useState(5);
+  const [optimizationMethod, setOptimizationMethod] = useState('QAOA');
+  const [period, setPeriod] = useState('1y');
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleRemoveStock = (ticker) => {
-    setStocks(stocks.filter(s => s.ticker !== ticker));
-  };
-
-  const handleSharesChange = (ticker, shares) => {
-    setStocks(stocks.map(s => {
-      if (s.ticker === ticker) {
-        const newShares = parseInt(shares) || 0;
-        return {
-          ...s,
-          shares: newShares,
-          value: newShares * s.price
-        };
+  // Search stocks with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.length >= 2) {
+        searchStocks(searchQuery);
+      } else {
+        setSearchResults([]);
+        setShowDropdown(false);
       }
-      return s;
-    }));
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const searchStocks = async (query) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/stocks/search?q=${query}`);
+      const data = await response.json();
+      if (data.success && data.results) {
+        setSearchResults(data.results);
+        setShowDropdown(data.results.length > 0);
+      } else {
+        setSearchResults([]);
+        setShowDropdown(false);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    }
   };
 
-  const getTotalValue = () => {
-    return stocks.reduce((sum, stock) => sum + stock.value, 0);
+  const addStockFromSearch = (result) => {
+    // Check if stock already exists
+    const exists = stocks.some(s => s.ticker === result.ticker);
+    if (!exists) {
+      setStocks([...stocks, {
+        ticker: result.ticker,
+        name: result.name,
+        market: result.exchange.includes('KS') || result.exchange.includes('KRX') ? '국내' : '해외',
+        price: '가격 조회 중...',
+        shares: 0
+      }]);
+    }
+    setSearchQuery('');
+    setShowDropdown(false);
   };
 
-  const handleQuickOptimize = async () => {
-    if (stocks.length === 0) {
-      alert(t('minimumOneTicker'));
+  const updateShares = (index, value) => {
+    const newStocks = [...stocks];
+    newStocks[index].shares = parseInt(value) || 0;
+    setStocks(newStocks);
+  };
+
+  const removeStock = (index) => {
+    const newStocks = stocks.filter((_, idx) => idx !== index);
+    setStocks(newStocks);
+  };
+
+  const handleOptimize = async () => {
+    // Validate stocks: filter out invalid tickers
+    const validStocks = stocks.filter(s => s.ticker && s.ticker.trim() !== '');
+    
+    if (validStocks.length < 2) {
+      alert('최소 2개 이상의 유효한 주식을 선택해주세요.');
       return;
     }
 
+    setLoading(true);
     try {
-      setOptimizing(true);
-      const tickerArray = stocks.map(s => s.ticker);
-
-      // 균등 비중으로 시작
-      const equalWeight = 1.0 / tickerArray.length;
-      const initialWeights = Array(tickerArray.length).fill(equalWeight);
-
-      // Check auto-save setting from localStorage
-      const autoSave = localStorage.getItem('autoSave') === 'true';
-
-      const response = await axios.post(
-        "/api/portfolio/optimize/with-weights",
-        {
-          tickers: tickerArray,
-          initial_weights: initialWeights,
-          risk_factor: targetRisk,
-          method: optimizationMethod,
-          period: "1y",
-          auto_save: autoSave,
-        },
-        {
-          timeout: 300000,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
+      // Calculate initial weights based on shares
+      const totalShares = validStocks.reduce((sum, s) => sum + s.shares, 0);
+      const initialWeights = validStocks.map(s => 
+        totalShares > 0 ? s.shares / totalShares : 1.0 / validStocks.length
       );
 
-      if (response.data.success) {
-        setOptimizationResult(response.data.result.optimized);
-        // 포트폴리오 가치 업데이트 (예시)
-        const newReturn = response.data.result.optimized.expected_return * 100;
-        setPortfolioReturn(newReturn);
+      console.log('Optimization request:', {
+        tickers: validStocks.map(s => s.ticker),
+        initial_weights: initialWeights,
+        period: period,
+        risk_factor: riskLevel / 10,
+        method: optimizationMethod.toLowerCase() === 'qaoa' ? 'quantum' : 'classical'
+      });
+
+      const response = await fetch('http://localhost:8080/api/portfolio/optimize/with-weights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tickers: validStocks.map(s => s.ticker),
+          initial_weights: initialWeights,
+          period: period,
+          risk_factor: riskLevel / 10,
+          method: optimizationMethod.toLowerCase() === 'qaoa' ? 'quantum' : 'classical',
+          auto_save: false
+        })
+      });
+      
+      const data = await response.json();
+      console.log('Optimization response:', data);
+      
+      if (data.success) {
+        setResults(data.result.optimized);
+        alert('✅ 최적화 성공!');
+      } else {
+        alert('최적화 실패: ' + (data.error || '알 수 없는 오류'));
       }
-    } catch (err) {
-      console.error("Optimization error:", err);
-      alert(t('optimizationFailed') + ": " + (err.response?.data?.error || err.message));
+    } catch (error) {
+      console.error('Optimization error:', error);
+      alert('최적화 실패: ' + error.message + '\n\n콘솔을 확인하세요 (F12).');
     } finally {
-      setOptimizing(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="dashboard">
-      {/* 상단 요약 */}
-      <div className="dashboard-summary">
-        <div className="summary-card">
-          <h3>{t('totalPortfolioValue')}</h3>
-          <p className="summary-value">${portfolioValue.toLocaleString()}</p>
-        </div>
-        <div className="summary-card">
-          <h3>{t('return')}</h3>
-          <p className="summary-value positive">+ {portfolioReturn.toFixed(2)}%</p>
-        </div>
-      </div>
-
-      {/* 포트폴리오 가치 그래프 */}
-      <div className="dashboard-widget">
-        <h3 className="widget-title">{t('portfolioValue')}</h3>
-        <div className="widget-content">
-          <div className="chart-placeholder">
-            <svg width="100%" height="200" viewBox="0 0 400 200">
-              <polyline
-                points="0,180 50,170 100,160 150,150 200,140 250,130 300,120 350,110 400,100"
-                fill="none"
-                stroke="#667eea"
-                strokeWidth="3"
-              />
-            </svg>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Stock Search Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-2xl">🔍</span>
+            <h2 className="text-xl font-bold text-gray-800">주식 검색</h2>
           </div>
-        </div>
-      </div>
-
-      {/* 그리드 레이아웃 */}
-      <div className="dashboard-grid">
-        {/* 주식 입력 위젯 */}
-        <div className="dashboard-widget" style={{ gridColumn: 'span 2' }}>
-          <h3 className="widget-title">{t('stockList')}</h3>
-          <div className="widget-content">
-            {/* 주식 검색 */}
-            <div style={{ marginBottom: '1rem' }}>
-              <StockSearchInput
-                onSelectStock={handleAddStock}
-                disabled={optimizing}
-              />
-            </div>
-
-            {/* 주식 목록 */}
-            {stocks.length > 0 ? (
-              <div className="stock-list">
-                <div className="stock-list-header">
-                  <div>{t('ticker')}</div>
-                  <div>{t('name')}</div>
-                  <div>{t('shares')}</div>
-                  <div>{t('price')}</div>
-                  <div>{t('value')}</div>
-                  <div></div>
-                </div>
-                {stocks.map(stock => (
-                  <div key={stock.ticker} className="stock-list-item">
-                    <div className="stock-ticker-cell">{stock.ticker}</div>
-                    <div className="stock-name-cell">{stock.name}</div>
-                    <div className="stock-shares-cell">
-                      <input
-                        type="number"
-                        min="0"
-                        value={stock.shares}
-                        onChange={(e) => handleSharesChange(stock.ticker, e.target.value)}
-                        placeholder={t('sharesPlaceholder')}
-                        disabled={optimizing}
-                        className="shares-input"
-                      />
-                    </div>
-                    <div className="stock-price-cell">
-                      ${stock.price.toFixed(2)}
-                    </div>
-                    <div className="stock-value-cell">
-                      ${stock.value.toFixed(2)}
-                    </div>
-                    <div className="stock-actions-cell">
-                      <button
-                        onClick={() => handleRemoveStock(stock.ticker)}
-                        disabled={optimizing}
-                        className="remove-button"
-                      >
-                        {t('removeStock')}
-                      </button>
-                    </div>
+          
+          <div className="relative">
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="종목명 또는 코드를 입력하세요 (예: 삼성전자, AAPL)"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            
+            {/* Search Dropdown */}
+            {showDropdown && searchResults.length > 0 && (
+              <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                {searchResults.map((result, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => addStockFromSearch(result)}
+                    className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 transition"
+                  >
+                    <span className="font-semibold text-blue-600">{result.ticker}</span>
+                    <span className="text-gray-700 ml-2">{result.name}</span>
+                    <span className="text-gray-400 ml-2 text-sm">({result.exchange})</span>
                   </div>
                 ))}
-                <div className="stock-list-total">
-                  <div>{t('total')}</div>
-                  <div></div>
-                  <div>{stocks.reduce((sum, s) => sum + s.shares, 0)}</div>
-                  <div></div>
-                  <div>${getTotalValue().toFixed(2)}</div>
-                  <div></div>
-                </div>
-              </div>
-            ) : (
-              <p className="placeholder-text" style={{ textAlign: 'center', padding: '2rem' }}>
-                {t('searchStockOrTicker')}
-              </p>
-            )}
-
-            {/* 최적화 설정 */}
-            {stocks.length > 0 && (
-              <div style={{ marginTop: '1rem' }}>
-                <div className="widget-field" style={{ marginBottom: '1rem' }}>
-                  <label>{t('optimizationMethod')}</label>
-                  <select 
-                    value={optimizationMethod}
-                    onChange={(e) => setOptimizationMethod(e.target.value)}
-                    className="widget-input-small"
-                    disabled={optimizing}
-                  >
-                    <option value="quantum">⚛️ {t('quantumOptimization')} - QAOA</option>
-                    <option value="classical">📊 {t('classicalOptimization')}</option>
-                  </select>
-                </div>
-                <div className="widget-field" style={{ marginBottom: '1rem' }}>
-                  <label>{t('targetRisk')}</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    value={targetRisk} 
-                    className="widget-input-small"
-                    onChange={(e) => setTargetRisk(parseFloat(e.target.value) || 0)}
-                    disabled={optimizing}
-                  />
-                </div>
-                <button 
-                  className="widget-button"
-                  onClick={handleQuickOptimize}
-                  disabled={optimizing}
-                  style={{ width: '100%' }}
-                >
-                  {optimizing ? t('optimizing') : t('optimize')}
-                </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* 최적화 결과 위젯 */}
-        <div className="dashboard-widget">
-          <h3 className="widget-title">{t('optimizationResult')}</h3>
-          <div className="widget-content">
-            {optimizationResult ? (
-              <div>
-                <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#666' }}>
-                  {t('optimizedWeights')}
+        {/* Stock Input Table */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-2xl">📊</span>
+            <h2 className="text-xl font-bold text-gray-800">주식 입력</h2>
+          </div>
+          
+          {/* Table Header */}
+          <div className="grid grid-cols-6 gap-4 mb-3 pb-2 border-b-2 border-gray-200 font-semibold text-gray-700 text-sm">
+            <div>종목 코드</div>
+            <div>종목명</div>
+            <div>시장</div>
+            <div>현재 가격 (원)</div>
+            <div>보유 수량 (주)</div>
+            <div>삭제</div>
+          </div>
+          
+          {/* Stock Rows */}
+          {stocks.map((stock, idx) => (
+            <div key={idx} className="grid grid-cols-6 gap-4 items-center py-3 border-b border-gray-100">
+              <input 
+                value={stock.ticker} 
+                readOnly 
+                className="p-2 bg-gray-50 border border-gray-200 rounded text-sm"
+              />
+              <input 
+                value={stock.name} 
+                readOnly 
+                className="p-2 bg-gray-50 border border-gray-200 rounded text-sm"
+              />
+              <select 
+                value={stock.market}
+                onChange={(e) => {
+                  const newStocks = [...stocks];
+                  newStocks[idx].market = e.target.value;
+                  setStocks(newStocks);
+                }}
+                className="p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+              >
+                <option>해외</option>
+                <option>국내</option>
+              </select>
+              <input 
+                value={stock.price} 
+                readOnly 
+                className="p-2 bg-gray-50 border border-gray-200 rounded text-sm"
+              />
+              <input 
+                type="number" 
+                min="0"
+                value={stock.shares}
+                onChange={(e) => updateShares(idx, e.target.value)}
+                placeholder="예: 10"
+                className="p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={() => removeStock(idx)}
+                className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition text-sm"
+              >
+                삭제
+              </button>
+            </div>
+          ))}
+          
+          {stocks.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-lg mb-2">📊 주식을 검색하여 추가해주세요</p>
+              <p className="text-sm">위의 검색창에서 종목을 찾아 추가할 수 있습니다</p>
+            </div>
+          )}
+        </div>
+
+        {/* Optimization Settings */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="grid grid-cols-2 gap-6">
+            
+            {/* Investment Amount */}
+            <div>
+              <label className="block mb-2 font-semibold text-gray-700">
+                투자 금액 (원)
+              </label>
+              <input
+                type="text"
+                value={investmentAmount}
+                onChange={(e) => setInvestmentAmount(e.target.value)}
+                placeholder="자동 계산"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Risk Level */}
+            <div>
+              <label className="block mb-2 font-semibold text-gray-700">
+                위험도 (1-10)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={riskLevel}
+                onChange={(e) => setRiskLevel(parseInt(e.target.value))}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Optimization Method */}
+            <div>
+              <label className="block mb-2 font-semibold text-gray-700">
+                최적화 방법
+              </label>
+              <select 
+                value={optimizationMethod}
+                onChange={(e) => setOptimizationMethod(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="QAOA">QAOA (Quantum Approximate Optimization)</option>
+                <option value="QMVS">QMVS (Quantum Minimum Variance Selection)</option>
+              </select>
+            </div>
+
+            {/* Period */}
+            <div>
+              <label className="block mb-2 font-semibold text-gray-700">
+                데이터 기간
+              </label>
+              <select 
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="1mo">1개월</option>
+                <option value="3mo">3개월</option>
+                <option value="6mo">6개월</option>
+                <option value="1y">1년</option>
+                <option value="2y">2년</option>
+                <option value="5y">5년</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Optimize Button */}
+          <button
+            onClick={handleOptimize}
+            disabled={loading || stocks.length === 0}
+            className={`mt-6 w-full py-3 rounded-lg font-semibold text-white transition ${
+              loading || stocks.length === 0
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
+          >
+            {loading ? '최적화 중...' : '최적화 실행'}
+          </button>
+        </div>
+
+        {/* Results Section */}
+        {results && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">최적화 결과</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-4 bg-blue-50 rounded">
+                <p className="text-sm text-gray-600">기대 수익률</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {(results.expected_return * 100).toFixed(2)}%
                 </p>
-                <div className="pie-chart-mini" style={{ marginBottom: '1rem' }}>
-                  {/* 파이 차트는 나중에 개선 */}
-                </div>
-                <div className="widget-metrics">
-                  <div>
-                    <span>AI TSK</span>
-                    <strong>{optimizationResult.optimization_score?.toFixed(2) || '1.25'}</strong>
-                  </div>
-                  <div>
-                    <span>{t('sharpeRatio')}</span>
-                    <strong>{optimizationResult.sharpe_ratio?.toFixed(2) || '1.25'}</strong>
-                  </div>
+              </div>
+              <div className="p-4 bg-red-50 rounded">
+                <p className="text-sm text-gray-600">위험도</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {(results.risk * 100).toFixed(2)}%
+                </p>
+              </div>
+              <div className="p-4 bg-green-50 rounded">
+                <p className="text-sm text-gray-600">샤프 비율</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {results.sharpe_ratio?.toFixed(2) || 'N/A'}
+                </p>
+              </div>
+            </div>
+
+            {/* Optimized Weights */}
+            {results.weights && results.tickers && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">최적화된 비중</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {results.tickers.map((ticker, idx) => (
+                    <div key={idx} className="p-3 bg-gray-50 rounded flex justify-between items-center">
+                      <span className="font-medium text-gray-700">{ticker}</span>
+                      <span className="text-indigo-600 font-semibold">
+                        {(results.weights[idx] * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ) : (
-              <p className="placeholder-text">
-                {t('optimizationWillBeDisplayedHere')}
-              </p>
             )}
           </div>
-        </div>
+        )}
 
-        {/* 챗봇 위젯 */}
-        <div className="dashboard-widget">
-          <h3 className="widget-title">{t('chatbot')}</h3>
-          <div className="widget-content">
-            <button 
-              className="chatbot-button"
-              onClick={() => onNavigateToOptimizer && onNavigateToOptimizer('chatbot')}
-            >
-              {t('askTnfAnything')}
-            </button>
-            <div className="chatbot-question">{t('whatIsSharpeRatio')}</div>
-            <div className="chatbot-input">
-              <input type="text" placeholder={t('typeMessage')} />
-              <button>{t('send')}</button>
-            </div>
-          </div>
-        </div>
-
-        {/* 결과 시각화 위젯 */}
-        <div className="dashboard-widget">
-          <h3 className="widget-title">{t('resultVisualization')}</h3>
-          <div className="widget-content">
-            <div className="widget-metrics">
-              <div>
-                <span>{t('balance')}</span>
-                <strong>{optimizationResult?.sharpe_ratio?.toFixed(2) || '1.25'}</strong>
-              </div>
-            </div>
-            <button
-              style={{
-                width: '100%',
-                marginTop: '1rem',
-                padding: '0.75rem',
-                background: '#667eea',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '0.95rem',
-                fontWeight: '500'
-              }}
-              onClick={() => onNavigateToOptimizer && onNavigateToOptimizer('optimizer')}
-            >
-              {t('goToOptimizerPage')}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
-}
+};
+
+export default Dashboard;

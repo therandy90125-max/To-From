@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantaFolio Logo Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            max-width: 800px;
+            padding: 2rem;
+        }
+        .logo-box {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            margin: 2rem 0;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        .logo-box img {
+            max-width: 400px;
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        .sidebar-preview {
+            background: #1e3a5f;
+            padding: 2rem;
+            border-radius: 16px;
+            margin: 2rem 0;
+        }
+        .sidebar-preview img {
+            width: 180px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #4fd1c5 0%, #667eea 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .status {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-weight: 600;
+        }
+        .status.success {
+            background: #48bb78;
+            color: white;
+        }
+        .status.warning {
+            background: #ed8936;
+            color: white;
+        }
+        .instructions {
+            background: rgba(255,255,255,0.1);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: left;
+            margin-top: 2rem;
+        }
+        .instructions h3 {
+            margin-bottom: 1rem;
+            color: #4fd1c5;
+        }
+        .instructions ol {
+            margin-left: 1.5rem;
+            line-height: 1.8;
+        }
+        .code {
+            background: rgba(0,0,0,0.3);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #4fd1c5;
+        }
+        .button {
+            display: inline-block;
+            padding: 1rem 2rem;
+            background: #4fd1c5;
+            color: #1e3a5f;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-top: 1rem;
+            transition: all 0.3s;
+        }
+        .button:hover {
+            background: #667eea;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>QuantaFolio Navigator</h1>
+        <p style="font-size: 1.2rem; opacity: 0.9;">Logo Preview & Status Check</p>
+        
+        <div id="status"></div>
+        
+        <div class="logo-box">
+            <h2 style="color: #1e3a5f; margin-bottom: 1rem;">Full Logo</h2>
+            <img id="fullLogo" src="/quantafolio-logo.png" alt="QuantaFolio Navigator" 
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22400%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22400%22 height=%22400%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-family=%22Arial%22 font-size=%2224%22%3ELogo Not Found%3C/text%3E%3C/svg%3E'">
+        </div>
+        
+        <div class="sidebar-preview">
+            <h2 style="margin-bottom: 1rem;">Sidebar Preview (180px)</h2>
+            <img id="sidebarLogo" src="/quantafolio-logo.png" alt="QuantaFolio Navigator"
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22180%22 height=%22180%22%3E%3Crect fill=%22%232d4a6e%22 width=%22180%22 height=%22180%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%234fd1c5%22 font-family=%22Arial%22 font-size=%2216%22%3ENo Logo%3C/text%3E%3C/svg%3E'">
+        </div>
+        
+        <div class="instructions">
+            <h3>📝 How to Add the Real Logo</h3>
+            <ol>
+                <li>Right-click the QuantaFolio Navigator image you uploaded</li>
+                <li>Select <span class="code">Save Image As...</span></li>
+                <li>Navigate to: <span class="code">frontend/public/</span></li>
+                <li>Save as: <span class="code">quantafolio-logo.png</span> (replace the existing 0 KB file)</li>
+                <li>Refresh this page to verify</li>
+            </ol>
+        </div>
+        
+        <a href="http://localhost:5173" class="button">Go to QuantaFolio Navigator →</a>
+        <br>
+        <button onclick="location.reload()" class="button" style="background: #667eea; margin-left: 1rem;">
+            🔄 Refresh Check
+        </button>
+    </div>
+    
+    <script>
+        // Check logo status
+        const img = new Image();
+        img.onload = function() {
+            if (this.naturalWidth > 10) {
+                document.getElementById('status').innerHTML = 
+                    '<div class="status success">✓ Logo Loaded Successfully!</div>' +
+                    '<p style="margin-top: 0.5rem;">Size: ' + this.naturalWidth + 'x' + this.naturalHeight + 'px</p>';
+            } else {
+                showWarning();
+            }
+        };
+        img.onerror = showWarning;
+        img.src = '/quantafolio-logo.png?t=' + Date.now();
+        
+        function showWarning() {
+            document.getElementById('status').innerHTML = 
+                '<div class="status warning">⚠ Logo is placeholder (0 KB)</div>' +
+                '<p style="margin-top: 0.5rem;">Please replace with the actual image</p>';
+        }
+    </script>
+</body>
+</html>
+

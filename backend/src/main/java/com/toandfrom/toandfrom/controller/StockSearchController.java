@@ -1,88 +1,87 @@
 package com.toandfrom.toandfrom.controller;
 
-import com.toandfrom.toandfrom.service.StockSearchService;
-import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/stocks")
 @CrossOrigin(origins = "http://localhost:5173")
 public class StockSearchController {
-    
-    private final StockSearchService stockSearchService;
-    
-    public StockSearchController(StockSearchService stockSearchService) {
-        this.stockSearchService = stockSearchService;
-    }
-    
+
+    @Value("${flask.api.url:http://localhost:5000}")
+    private String flaskApiUrl;
+
+    private final RestTemplate restTemplate = new RestTemplate();
+
     /**
      * 주식 검색 API
-     * 티커 또는 회사명으로 검색
+     * Flask 백엔드로 프록시하여 주식 검색 결과 반환
      * 
-     * @param query 검색어 (티커 또는 회사명)
-     * @return 검색 결과 목록
+     * @param q 검색어 (티커 또는 회사명)
+     * @return 검색 결과 리스트
      */
     @GetMapping("/search")
     public ResponseEntity<Map<String, Object>> searchStocks(@RequestParam String q) {
         try {
-            if (q == null || q.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "error", "검색어가 필요합니다."
-                ));
+            // Flask 백엔드로 프록시
+            String url = flaskApiUrl + "/api/stocks/search?q=" + q;
+            System.out.println("Calling Flask: " + url);
+            
+            @SuppressWarnings("unchecked")
+            List<Map<String, String>> results = restTemplate.getForObject(url, List.class);
+            
+            System.out.println("Flask returned " + (results != null ? results.size() : 0) + " results");
+            if (results != null && !results.isEmpty()) {
+                System.out.println("First result: " + results.get(0));
             }
             
-            List<Map<String, String>> results = stockSearchService.searchStocks(q.trim());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("results", results != null ? results : new ArrayList<>());
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "results", results
-            ));
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "success", false,
-                "error", "주식 검색 중 오류: " + e.getMessage()
-            ));
+            System.err.println("Error calling Flask stock search: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "주식 검색 중 오류가 발생했습니다: " + e.getMessage());
+            errorResponse.put("results", new ArrayList<>());
+            
+            return ResponseEntity.status(500).body(errorResponse);
         }
     }
-    
+
     /**
-     * 주식 정보 조회 API
-     * 특정 티커의 상세 정보 조회
+     * 특정 주식 정보 조회 (선택사항)
      * 
-     * @param ticker 주식 티커 심볼
+     * @param ticker 주식 티커
      * @return 주식 상세 정보
      */
     @GetMapping("/info/{ticker}")
     public ResponseEntity<Map<String, Object>> getStockInfo(@PathVariable String ticker) {
         try {
-            if (ticker == null || ticker.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "error", "티커가 필요합니다."
-                ));
-            }
+            String url = flaskApiUrl + "/api/stocks/info/" + ticker;
             
-            Map<String, Object> info = stockSearchService.getStockInfo(ticker.trim());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> info = restTemplate.getForObject(url, Map.class);
             
-            if (info == null) {
-                return ResponseEntity.notFound().build();
-            }
+            return ResponseEntity.ok(info != null ? info : new HashMap<>());
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "data", info
-            ));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "success", false,
-                "error", "주식 정보 조회 중 오류: " + e.getMessage()
-            ));
+            System.err.println("Error getting stock info: " + e.getMessage());
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "주식 정보 조회 중 오류가 발생했습니다: " + e.getMessage());
+            
+            return ResponseEntity.status(500).body(errorResponse);
         }
     }
 }
-

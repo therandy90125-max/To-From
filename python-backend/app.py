@@ -10,10 +10,15 @@ from chatbot import chat
 import traceback
 import logging
 import os
+import yfinance as yf
+import requests
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Alpha Vantage API Key
+ALPHA_VANTAGE_KEY = 'AKD5ALSCZK8YSJNJ'
 
 app = Flask(__name__, static_folder='static')
 CORS(app)  # CORS 활성화 (프론트엔드 연결용)
@@ -420,6 +425,230 @@ def chatbot_chat():
             'success': False,
             'error': f'챗봇 오류: {str(e)}'
         }), 500
+
+
+@app.route('/api/stocks/search', methods=['GET'])
+def search_stocks():
+    """
+    주식 검색 API (한국 + 미국)
+    
+    Query Parameters:
+        q: 검색어 (티커 또는 회사명)
+    
+    Response:
+        [
+            {
+                "ticker": "005930.KS",
+                "name": "Samsung Electronics",
+                "exchange": "KRX"
+            },
+            ...
+        ]
+    """
+    try:
+        query = request.args.get('q', '').upper()
+        
+        if not query or len(query) < 1:
+            return jsonify([])
+        
+        results = []
+        
+        # 한국 주식 데이터베이스 (확장된 리스트)
+        korean_stocks = {
+            # 대형주
+            '005930': 'Samsung Electronics',
+            '000660': 'SK Hynix',
+            '035420': 'NAVER',
+            '035720': 'Kakao',
+            '051910': 'LG Chem',
+            '006400': 'Samsung SDI',
+            '005380': 'Hyundai Motor',
+            '012330': 'Hyundai Mobis',
+            '028260': 'Samsung C&T',
+            
+            # 제약/바이오
+            '068270': 'Celltrion',
+            '207940': 'Samsung Biologics',
+            '326030': 'SK Biopharmaceuticals',
+            '128940': 'Han Mi Pharm',
+            '214450': 'Celltrion Healthcare',
+            
+            # IT/게임
+            '251270': 'Netmarble',
+            '036570': 'NCsoft',
+            '259960': 'Krafton',
+            '018260': 'Samsung SDS',
+            '035900': 'JYP Entertainment',
+            
+            # 금융
+            '055550': 'Shinhan Financial Group',
+            '086790': 'Hana Financial Group',
+            '105560': 'KB Financial Group',
+            '032830': 'Samsung Life Insurance',
+            
+            # 유틸리티/에너지
+            '015760': 'Korea Electric Power',
+            '010950': 'S-Oil',
+            '009540': 'Korea Gas',
+            '034730': 'SK',
+            
+            # 통신
+            '017670': 'SK Telecom',
+            '030200': 'KT',
+            '032640': 'LG Uplus',
+            
+            # 자동차/부품
+            '000270': 'Kia',
+            '161390': 'Hanon Systems',
+            
+            # 철강/화학
+            '005490': 'POSCO',
+            '096770': 'SK Innovation',
+            '010130': 'Korea Zinc',
+            
+            # 기타
+            '033780': 'KT&G',
+            '003550': 'LG',
+            '018880': 'Samsung Securities',
+            '000720': 'Hyundai Engineering & Construction'
+        }
+        
+        # 한국 주식 매칭
+        for code, name in korean_stocks.items():
+            if query in code or query in name.upper():
+                ticker = f"{code}.KS"
+                results.append({
+                    'ticker': ticker,
+                    'name': name,
+                    'exchange': 'KRX'
+                })
+        
+        # 미국 주식 데이터베이스
+        us_stocks = {
+            # Tech Giants
+            'AAPL': 'Apple Inc.',
+            'MSFT': 'Microsoft Corporation',
+            'GOOGL': 'Alphabet Inc.',
+            'GOOG': 'Alphabet Inc. (Class C)',
+            'AMZN': 'Amazon.com Inc.',
+            'META': 'Meta Platforms Inc.',
+            'NVDA': 'NVIDIA Corporation',
+            'TSLA': 'Tesla Inc.',
+            'AMD': 'Advanced Micro Devices',
+            'INTC': 'Intel Corporation',
+            'CSCO': 'Cisco Systems',
+            'ORCL': 'Oracle Corporation',
+            'ADBE': 'Adobe Inc.',
+            'CRM': 'Salesforce Inc.',
+            'NFLX': 'Netflix Inc.',
+            
+            # Finance
+            'BRK.B': 'Berkshire Hathaway',
+            'JPM': 'JPMorgan Chase',
+            'V': 'Visa Inc.',
+            'MA': 'Mastercard Inc.',
+            'BAC': 'Bank of America',
+            'WFC': 'Wells Fargo',
+            'GS': 'Goldman Sachs',
+            'MS': 'Morgan Stanley',
+            'C': 'Citigroup',
+            'AXP': 'American Express',
+            
+            # Consumer
+            'WMT': 'Walmart Inc.',
+            'HD': 'Home Depot',
+            'DIS': 'Walt Disney',
+            'MCD': 'McDonald\'s Corporation',
+            'NKE': 'Nike Inc.',
+            'SBUX': 'Starbucks Corporation',
+            'KO': 'Coca-Cola Company',
+            'PEP': 'PepsiCo Inc.',
+            'COST': 'Costco Wholesale',
+            'TGT': 'Target Corporation',
+            
+            # Healthcare
+            'UNH': 'UnitedHealth Group',
+            'JNJ': 'Johnson & Johnson',
+            'PFE': 'Pfizer Inc.',
+            'ABBV': 'AbbVie Inc.',
+            'TMO': 'Thermo Fisher Scientific',
+            'ABT': 'Abbott Laboratories',
+            'MRK': 'Merck & Co.',
+            'LLY': 'Eli Lilly and Company',
+            
+            # Energy
+            'XOM': 'Exxon Mobil',
+            'CVX': 'Chevron Corporation',
+            
+            # Telecom
+            'T': 'AT&T Inc.',
+            'VZ': 'Verizon Communications',
+            
+            # Industrial
+            'BA': 'Boeing Company',
+            'CAT': 'Caterpillar Inc.',
+            'GE': 'General Electric'
+        }
+        
+        # 미국 주식 매칭
+        for ticker, name in us_stocks.items():
+            if query in ticker or query in name.upper():
+                if not any(r['ticker'] == ticker for r in results):
+                    results.append({
+                        'ticker': ticker,
+                        'name': name,
+                        'exchange': 'NASDAQ'
+                    })
+        
+        # Alpha Vantage API로 검색 (로컬 DB에 없는 경우)
+        if len(results) == 0:
+            try:
+                logger.info(f"Searching Alpha Vantage for: {query}")
+                av_url = f'https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey={ALPHA_VANTAGE_KEY}'
+                av_response = requests.get(av_url, timeout=5)
+                av_data = av_response.json()
+                
+                for match in av_data.get('bestMatches', [])[:10]:
+                    ticker = match.get('1. symbol', '')
+                    name = match.get('2. name', '')
+                    region = match.get('4. region', 'Unknown')
+                    match_score = match.get('9. matchScore', '0')
+                    
+                    # 매치 스코어가 0.5 이상인 것만 추가
+                    if float(match_score) >= 0.5:
+                        results.append({
+                            'ticker': ticker,
+                            'name': name,
+                            'exchange': region
+                        })
+                
+                logger.info(f"Alpha Vantage found {len(results)} results")
+                
+            except requests.exceptions.Timeout:
+                logger.warning("Alpha Vantage API timeout")
+            except Exception as e:
+                logger.warning(f"Alpha Vantage API error: {str(e)}")
+                # Fallback to yfinance
+                try:
+                    stock = yf.Ticker(query)
+                    info = stock.info
+                    
+                    if info and 'longName' in info:
+                        results.append({
+                            'ticker': query,
+                            'name': info.get('longName', query),
+                            'exchange': info.get('exchange', 'UNKNOWN')
+                        })
+                except Exception as yf_error:
+                    logger.debug(f"yfinance lookup also failed: {str(yf_error)}")
+        
+        # 최대 10개 결과만 반환
+        return jsonify(results[:10])
+        
+    except Exception as e:
+        logger.error(f"주식 검색 오류: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify([])
 
 
 @app.errorhandler(404)

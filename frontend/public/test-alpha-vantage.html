@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha Vantage Test - QuantaFolio Navigator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 2rem;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+        }
+        .test-section {
+            background: rgba(255,255,255,0.1);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+        }
+        .test-section h3 {
+            margin-bottom: 1rem;
+            color: #4fd1c5;
+        }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 2px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+        input::placeholder {
+            color: rgba(255,255,255,0.6);
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background: #4fd1c5;
+            color: #1e3a5f;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #667eea;
+            transform: translateY(-2px);
+        }
+        .results {
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .result-item {
+            padding: 0.75rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+        .result-item:last-child {
+            margin-bottom: 0;
+        }
+        .status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        .status.success {
+            background: #48bb78;
+        }
+        .status.error {
+            background: #f56565;
+        }
+        .status.info {
+            background: #4299e1;
+        }
+        code {
+            background: rgba(0,0,0,0.3);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #4fd1c5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Alpha Vantage Integration Test</h1>
+        
+        <!-- Test 1: Spring Boot -->
+        <div class="test-section">
+            <h3>Test 1: Spring Boot Proxy</h3>
+            <input type="text" id="input1" placeholder="Enter stock ticker (e.g., IBM, SONY, AAPL)" value="IBM">
+            <button onclick="testSpringBoot()">Test Spring Boot (Port 8080)</button>
+            <div id="results1" class="results" style="display:none;"></div>
+        </div>
+        
+        <!-- Test 2: Flask Direct -->
+        <div class="test-section">
+            <h3>Test 2: Flask Direct</h3>
+            <input type="text" id="input2" placeholder="Enter stock ticker (e.g., IBM, SONY, AAPL)" value="IBM">
+            <button onclick="testFlask()">Test Flask (Port 5000)</button>
+            <div id="results2" class="results" style="display:none;"></div>
+        </div>
+        
+        <!-- Test 3: Alpha Vantage Direct -->
+        <div class="test-section">
+            <h3>Test 3: Alpha Vantage API Direct</h3>
+            <input type="text" id="input3" placeholder="Enter stock ticker (e.g., IBM, SONY, AAPL)" value="IBM">
+            <button onclick="testAlphaVantage()">Test Alpha Vantage Direct</button>
+            <div id="results3" class="results" style="display:none;"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📝 Instructions</h3>
+            <p style="line-height: 1.6;">
+                1. Enter a stock ticker (IBM, SONY, TSLA, etc.)<br>
+                2. Click each test button<br>
+                3. Compare results from all 3 sources<br>
+                4. Check browser console (F12) for detailed logs<br>
+                5. Open Network tab to see actual API responses
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        const API_KEY = 'AKD5ALSCZK8YSJNJ';
+        
+        async function testSpringBoot() {
+            const query = document.getElementById('input1').value;
+            const resultsDiv = document.getElementById('results1');
+            resultsDiv.innerHTML = '<div class="status info">Loading...</div>';
+            resultsDiv.style.display = 'block';
+            
+            try {
+                console.log('Testing Spring Boot:', `http://localhost:8080/api/stocks/search?q=${query}`);
+                const response = await fetch(`http://localhost:8080/api/stocks/search?q=${query}`);
+                const data = await response.json();
+                
+                console.log('Spring Boot Response:', data);
+                
+                let html = `<div class="status success">✓ Success</div>`;
+                html += `<p><strong>Success:</strong> ${data.success}</p>`;
+                html += `<p><strong>Results:</strong> ${data.results ? data.results.length : 0}</p>`;
+                
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(result => {
+                        html += `<div class="result-item">
+                            <strong>${result.ticker}</strong> - ${result.name}<br>
+                            <small>${result.exchange}</small>
+                        </div>`;
+                    });
+                } else {
+                    html += '<p style="color: #f56565;">No results found</p>';
+                }
+                
+                resultsDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Spring Boot Error:', error);
+                resultsDiv.innerHTML = `<div class="status error">✗ Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function testFlask() {
+            const query = document.getElementById('input2').value;
+            const resultsDiv = document.getElementById('results2');
+            resultsDiv.innerHTML = '<div class="status info">Loading...</div>';
+            resultsDiv.style.display = 'block';
+            
+            try {
+                console.log('Testing Flask:', `http://localhost:5000/api/stocks/search?q=${query}`);
+                const response = await fetch(`http://localhost:5000/api/stocks/search?q=${query}`);
+                const data = await response.json();
+                
+                console.log('Flask Response:', data);
+                
+                let html = `<div class="status success">✓ Success</div>`;
+                html += `<p><strong>Results:</strong> ${data.length}</p>`;
+                
+                if (data.length > 0) {
+                    data.forEach(result => {
+                        html += `<div class="result-item">
+                            <strong>${result.ticker}</strong> - ${result.name}<br>
+                            <small>${result.exchange}</small>
+                        </div>`;
+                    });
+                } else {
+                    html += '<p style="color: #f56565;">No results found</p>';
+                }
+                
+                resultsDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Flask Error:', error);
+                resultsDiv.innerHTML = `<div class="status error">✗ Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function testAlphaVantage() {
+            const query = document.getElementById('input3').value;
+            const resultsDiv = document.getElementById('results3');
+            resultsDiv.innerHTML = '<div class="status info">Loading...</div>';
+            resultsDiv.style.display = 'block';
+            
+            try {
+                const url = `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${query}&apikey=${API_KEY}`;
+                console.log('Testing Alpha Vantage:', url);
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                console.log('Alpha Vantage Response:', data);
+                
+                let html = `<div class="status success">✓ Success</div>`;
+                
+                if (data.bestMatches && data.bestMatches.length > 0) {
+                    html += `<p><strong>Results:</strong> ${data.bestMatches.length}</p>`;
+                    data.bestMatches.forEach(match => {
+                        html += `<div class="result-item">
+                            <strong>${match['1. symbol']}</strong> - ${match['2. name']}<br>
+                            <small>${match['4. region']} | Match: ${(parseFloat(match['9. matchScore']) * 100).toFixed(0)}%</small>
+                        </div>`;
+                    });
+                } else {
+                    html += '<p style="color: #f56565;">No results found</p>';
+                }
+                
+                resultsDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Alpha Vantage Error:', error);
+                resultsDiv.innerHTML = `<div class="status error">✗ Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
+
