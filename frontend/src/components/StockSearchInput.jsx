@@ -1,34 +1,82 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { useLanguage } from '../contexts/LanguageContext';
-import '../styles/StockSearchInput.css';
 
-export default function StockSearchInput({ onSelectStock, placeholder, disabled }) {
-  const { t } = useLanguage();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
+/**
+ * 주식 검색 입력 컴포넌트 (한국 + 미국 주식 지원)
+ * Stock Search Input with Exchange Badges
+ */
+const StockSearchInput = ({ onSelectStock, placeholder = "Search stocks...", className = "" }) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
   const dropdownRef = useRef(null);
-  const inputRef = useRef(null);
 
-  // 검색어 변경 시 디바운스 적용
-  useEffect(() => {
-    if (searchQuery.length < 1) {
-      setSearchResults([]);
-      setShowDropdown(false);
+  // Get exchange badge color
+  const getExchangeBadgeColor = (exchange) => {
+    switch (exchange) {
+      case 'KOSPI':
+      case 'KOSDAQ':
+      case 'KRX':
+        return 'bg-blue-500';
+      case 'NASDAQ':
+      case 'NYSE':
+        return 'bg-green-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
+  // Get exchange flag
+  const getExchangeFlag = (exchange) => {
+    switch (exchange) {
+      case 'KOSPI':
+      case 'KOSDAQ':
+      case 'KRX':
+        return '🇰🇷';
+      case 'NASDAQ':
+      case 'NYSE':
+        return '🇺🇸';
+      default:
+        return '🌐';
+    }
+  };
+
+  // Search stocks
+  const searchStocks = async (searchQuery) => {
+    if (!searchQuery || searchQuery.length < 1) {
+      setResults([]);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      await handleStockSearch(searchQuery);
-    }, 300); // 300ms 대기 후 검색
+    setLoading(true);
+
+    try {
+      const response = await axios.get(`/api/portfolio/stock/search?q=${encodeURIComponent(searchQuery)}`);
+      
+      if (response.data.success && response.data.results) {
+        setResults(response.data.results);
+      } else {
+        setResults([]);
+      }
+    } catch (err) {
+      console.error('Stock search error:', err);
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchStocks(query);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [query]);
 
-  // 외부 클릭 감지
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -40,107 +88,116 @@ export default function StockSearchInput({ onSelectStock, placeholder, disabled 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleStockSearch = async (query) => {
-    try {
-      setIsSearching(true);
-      const response = await axios.get(`/api/stocks/search?q=${encodeURIComponent(query)}`);
-      
-      if (response.data.success) {
-        setSearchResults(response.data.results || []);
-        setShowDropdown(true);
-        setSelectedIndex(-1);
-      }
-    } catch (error) {
-      console.error('Stock search error:', error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
+  // Handle input change
+  const handleInputChange = (e) => {
+    setQuery(e.target.value);
+    setShowDropdown(true);
   };
 
+  // Handle stock selection
   const handleSelectStock = (stock) => {
-    setSearchQuery('');
-    setShowDropdown(false);
-    setSearchResults([]);
     if (onSelectStock) {
       onSelectStock(stock);
     }
+    setQuery('');
+    setResults([]);
+    setShowDropdown(false);
   };
 
-  const handleKeyDown = (e) => {
-    if (!showDropdown || searchResults.length === 0) return;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => 
-          prev < searchResults.length - 1 ? prev + 1 : prev
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
-          handleSelectStock(searchResults[selectedIndex]);
-        }
-        break;
-      case 'Escape':
-        setShowDropdown(false);
-        setSelectedIndex(-1);
-        break;
-      default:
-        break;
-    }
+  // Highlight matching text
+  const highlightMatch = (text, query) => {
+    if (!query) return text;
+    
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return parts.map((part, index) => 
+      part.toLowerCase() === query.toLowerCase() ? 
+        <span key={index} className="bg-yellow-200 dark:bg-yellow-700 font-semibold">{part}</span> : 
+        part
+    );
   };
 
   return (
-    <div className="stock-search-container" ref={dropdownRef}>
-      <div className="stock-search-input-wrapper">
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      {/* Search Input */}
+      <div className="relative">
         <input
-          ref={inputRef}
           type="text"
-          className="stock-search-input"
-          placeholder={placeholder || t('searchStockOrTicker')}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
+          value={query}
+          onChange={handleInputChange}
+          onFocus={() => setShowDropdown(true)}
+          placeholder={placeholder}
+          className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg 
+                     bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                     focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                     placeholder-gray-400 dark:placeholder-gray-500"
         />
-        {isSearching && (
-          <div className="stock-search-spinner">
-            <div className="spinner-small"></div>
-          </div>
-        )}
+        
+        {/* Search Icon / Loading Spinner */}
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+          {loading ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+          ) : (
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          )}
+        </div>
       </div>
 
-      {showDropdown && searchResults.length > 0 && (
-        <div className="stock-search-dropdown">
-          {searchResults.map((stock, index) => (
-            <div
-              key={stock.ticker}
-              className={`stock-search-item ${index === selectedIndex ? 'selected' : ''}`}
-              onClick={() => handleSelectStock(stock)}
-              onMouseEnter={() => setSelectedIndex(index)}
-            >
-              <div className="stock-ticker">{stock.ticker}</div>
-              <div className="stock-name">{stock.name}</div>
-              <div className="stock-exchange">{stock.exchange}</div>
+      {/* Dropdown Results */}
+      {showDropdown && (query.length > 0 || results.length > 0) && (
+        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 
+                        rounded-lg shadow-xl max-h-96 overflow-y-auto">
+          {loading && results.length === 0 ? (
+            <div className="p-4 text-center text-gray-500">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
+              Searching...
             </div>
-          ))}
-        </div>
-      )}
+          ) : results.length === 0 ? (
+            <div className="p-4 text-center text-gray-500">
+              {query.length > 0 ? '🔍 No results found' : 'Start typing to search...'}
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+              {results.map((stock, index) => (
+                <li
+                  key={`${stock.ticker || stock.symbol}-${index}`}
+                  onClick={() => handleSelectStock(stock)}
+                  className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      {/* Ticker Symbol */}
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="font-mono font-bold text-gray-900 dark:text-white">
+                          {highlightMatch(stock.ticker || stock.symbol, query)}
+                        </span>
+                        
+                        {/* Exchange Badge */}
+                        <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded ${getExchangeBadgeColor(stock.exchange)}`}>
+                          {getExchangeFlag(stock.exchange)} {stock.exchange}
+                        </span>
+                      </div>
+                      
+                      {/* Company Name */}
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {highlightMatch(stock.name, query)}
+                      </div>
+                    </div>
 
-      {showDropdown && searchResults.length === 0 && !isSearching && searchQuery.length > 0 && (
-        <div className="stock-search-dropdown">
-          <div className="stock-search-no-results">
-            {t('noResultsFound')}
-          </div>
+                    {/* Arrow Icon */}
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
   );
-}
+};
 
+export default StockSearchInput;

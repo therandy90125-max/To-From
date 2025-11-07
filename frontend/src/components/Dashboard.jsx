@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from "../contexts/LanguageContext";
+import StockPriceWidget from './StockPriceWidget';
+import StockSearchInput from './StockSearchInput';
 
 const Dashboard = () => {
   const { t } = useLanguage();
@@ -211,7 +213,7 @@ const Dashboard = () => {
               <input 
                 value={stock.ticker} 
                 readOnly 
-                className="p-2 bg-gray-50 border border-gray-200 rounded text-sm"
+                className="p-2 bg-gray-50 border border-gray-200 rounded text-sm font-mono font-semibold"
               />
               <input 
                 value={stock.name} 
@@ -230,11 +232,10 @@ const Dashboard = () => {
                 <option>{t('foreign')}</option>
                 <option>{t('domestic')}</option>
               </select>
-              <input 
-                value={stock.price} 
-                readOnly 
-                className="p-2 bg-gray-50 border border-gray-200 rounded text-sm"
-              />
+              {/* Real-time Price Widget */}
+              <div className="flex items-center">
+                <StockPriceWidget symbol={stock.ticker} showDetails={false} />
+              </div>
               <input 
                 type="number" 
                 min="0"

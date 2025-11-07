@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { useLanguage } from "../contexts/LanguageContext";
+import StockPriceWidget from './StockPriceWidget';
 
 export default function PortfolioOptimizerWithWeights() {
   const { t } = useLanguage();
@@ -184,6 +185,20 @@ export default function PortfolioOptimizerWithWeights() {
               className="input"
               disabled={loading}
             />
+            {/* Real-time Price Preview */}
+            {tickers && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {tickers.split(',').map((ticker, idx) => {
+                  const trimmedTicker = ticker.trim();
+                  if (!trimmedTicker) return null;
+                  return (
+                    <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2 shadow-sm">
+                      <StockPriceWidget symbol={trimmedTicker} showDetails={false} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="form-group">

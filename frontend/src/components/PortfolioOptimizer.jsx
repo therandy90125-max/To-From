@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import StockPriceWidget from './StockPriceWidget';
 
 export default function PortfolioOptimizer() {
   const [tickers, setTickers] = useState("AAPL,GOOGL,MSFT");
@@ -85,13 +86,27 @@ export default function PortfolioOptimizer() {
               type="text"
               value={tickers}
               onChange={(e) => setTickers(e.target.value)}
-              placeholder="예: AAPL, GOOGL, MSFT, AMZN, TSLA"
+              placeholder="예: AAPL, GOOGL, MSFT, 005930"
               className="input"
               disabled={loading}
             />
             <small className="hint">
-              주식 티커를 쉼표로 구분하여 입력하세요
+              주식 티커를 쉼표로 구분하여 입력하세요 (한국 주식: 005930, 미국 주식: AAPL)
             </small>
+            {/* Real-time Price Preview */}
+            {tickers && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {tickers.split(',').map((ticker, idx) => {
+                  const trimmedTicker = ticker.trim();
+                  if (!trimmedTicker) return null;
+                  return (
+                    <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2 shadow-sm">
+                      <StockPriceWidget symbol={trimmedTicker} showDetails={false} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="form-group">
