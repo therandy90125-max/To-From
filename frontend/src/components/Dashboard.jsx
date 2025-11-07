@@ -10,6 +10,7 @@ export default function Dashboard({ onNavigateToOptimizer }) {
   const [optimizationResult, setOptimizationResult] = useState(null);
   const [targetRisk, setTargetRisk] = useState(0.15);
   const [optimizing, setOptimizing] = useState(false);
+  const [optimizationMethod, setOptimizationMethod] = useState('quantum'); // quantum or classical
   
   // 주식 목록 관리
   const [stocks, setStocks] = useState([]);
@@ -76,7 +77,7 @@ export default function Dashboard({ onNavigateToOptimizer }) {
           tickers: tickerArray,
           initial_weights: initialWeights,
           risk_factor: targetRisk,
-          method: "quantum",
+          method: optimizationMethod,
           period: "1y",
           auto_save: autoSave,
         },
@@ -205,9 +206,21 @@ export default function Dashboard({ onNavigateToOptimizer }) {
               </p>
             )}
 
-            {/* 최적화 버튼 */}
+            {/* 최적화 설정 */}
             {stocks.length > 0 && (
               <div style={{ marginTop: '1rem' }}>
+                <div className="widget-field" style={{ marginBottom: '1rem' }}>
+                  <label>{t('optimizationMethod')}</label>
+                  <select 
+                    value={optimizationMethod}
+                    onChange={(e) => setOptimizationMethod(e.target.value)}
+                    className="widget-input-small"
+                    disabled={optimizing}
+                  >
+                    <option value="quantum">⚛️ {t('quantumOptimization')} - QAOA</option>
+                    <option value="classical">📊 {t('classicalOptimization')}</option>
+                  </select>
+                </div>
                 <div className="widget-field" style={{ marginBottom: '1rem' }}>
                   <label>{t('targetRisk')}</label>
                   <input 

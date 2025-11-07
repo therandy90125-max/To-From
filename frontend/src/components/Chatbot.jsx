@@ -22,6 +22,13 @@ export default function Chatbot() {
     scrollToBottom();
   }, [messages]);
 
+  // 언어 자동 감지 함수
+  const detectLanguage = (text) => {
+    // 한글이 포함되어 있으면 한국어, 아니면 영어
+    const koreanRegex = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/;
+    return koreanRegex.test(text) ? 'ko' : 'en';
+  };
+
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
@@ -31,9 +38,13 @@ export default function Chatbot() {
     setLoading(true);
 
     try {
+      // 언어 자동 감지
+      const detectedLanguage = detectLanguage(input);
+      
       const response = await axios.post("/api/chatbot/chat", {
         message: input,
-        history: messages.slice(-5) // 최근 5개 메시지만 전송
+        history: messages.slice(-5), // 최근 5개 메시지만 전송
+        language: detectedLanguage // 감지된 언어 전달
       });
 
       const assistantMessage = {
