@@ -4,13 +4,18 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class PortfolioOptimizationService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(PortfolioOptimizationService.class);
 
     @Value("${flask.api.url:http://localhost:5000}")
     private String flaskApiUrl;
@@ -120,15 +125,18 @@ public class PortfolioOptimizationService {
         String url = flaskApiUrl + "/api/stocks/search?q=" + query;
         
         try {
-            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            // Flask returns an array, not a map
+            ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("results", response.getBody());
             return result;
         } catch (Exception e) {
+            logger.error("Stock search error: {}", e.getMessage());
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", "검색 실패: " + e.getMessage());
+            errorResponse.put("results", new ArrayList<>());
             return errorResponse;
         }
     }
