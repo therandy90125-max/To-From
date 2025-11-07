@@ -8,11 +8,17 @@ from flask_cors import CORS
 from optimizer import optimize_portfolio, PortfolioOptimizer
 from chatbot import chat
 from stock_data import get_stock_price
+from workflow_engine import (
+    workflow_engine, 
+    create_portfolio_agent,
+    WorkflowState
+)
 import traceback
 import logging
 import os
 import yfinance as yf
 import requests
+import uuid
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -377,6 +383,130 @@ def optimize_batch():
         return jsonify({
             'success': False,
             'error': f'배치 최적화 오류: {str(e)}'
+        }), 500
+
+
+@app.route('/api/optimize/workflow', methods=['POST'])
+def optimize_with_workflow():
+    """
+    AI Agent 워크플로우를 사용한 최적화 (다이어그램 패턴)
+    
+    Flow:
+    1. Form Submission → 2. AI Agent → 3. Optimization → 
+    4. Risk Analysis → 5. Conditional Branching → 6. Action
+    
+    Request Body (JSON):
+    {
+        "tickers": ["AAPL", "GOOGL", "MSFT"],
+        "initial_weights": [0.4, 0.3, 0.3],  # optional
+        "risk_factor": 0.5,
+        "method": "quantum",
+        "period": "1y"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "workflow_id": "wf_123abc",
+        "optimization_result": {...},
+        "risk_analysis": {
+            "risk_level": "low|medium|high",
+            "volatility_percentage": 15.2,
+            "recommendation": "...",
+            "sharpe_ratio": 0.85
+        },
+        "action_taken": "alert_manager|notify_user|auto_approve",
+        "action_result": {...},
+        "workflow_steps": [...]
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'tickers' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'tickers 필드가 필요합니다.'
+            }), 400
+        
+        # Generate workflow ID
+        workflow_id = f"wf_{uuid.uuid4().hex[:8]}"
+        
+        # Create AI Agent
+        agent = create_portfolio_agent()
+        
+        # Create workflow
+        workflow_engine.create_workflow(workflow_id, agent)
+        
+        logger.info(f"Created workflow: {workflow_id}")
+        
+        # Prepare optimization function
+        def run_optimization(tickers, initial_weights, risk_factor, method, period):
+            """Optimization wrapper for workflow"""
+            if initial_weights:
+                # With weights
+                optimizer = PortfolioOptimizer(
+                    tickers=tickers,
+                    risk_factor=risk_factor,
+                    initial_weights=initial_weights
+                )
+                optimizer.fetch_data(period=period)
+                return optimizer.optimize_with_weights(method=method)
+            else:
+                # Without weights
+                return optimize_portfolio(
+                    tickers=tickers,
+                    risk_factor=risk_factor,
+                    method=method,
+                    period=period
+                )
+        
+        # Execute workflow
+        result = workflow_engine.execute_workflow(
+            workflow_id=workflow_id,
+            input_data=data,
+            optimization_func=run_optimization
+        )
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        logger.error(f"워크플로우 오류: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'워크플로우 오류: {str(e)}'
+        }), 500
+
+
+@app.route('/api/workflow/<workflow_id>/status', methods=['GET'])
+def get_workflow_status(workflow_id):
+    """
+    워크플로우 상태 조회
+    
+    Response:
+    {
+        "id": "wf_123abc",
+        "status": "completed|processing|failed",
+        "created_at": "2025-11-07T...",
+        "steps": [...]
+    }
+    """
+    try:
+        status = workflow_engine.get_workflow_status(workflow_id)
+        
+        if 'error' in status:
+            return jsonify(status), 404
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logger.error(f"상태 조회 오류: {str(e)}")
+        return jsonify({
+            'error': f'상태 조회 오류: {str(e)}'
         }), 500
 
 

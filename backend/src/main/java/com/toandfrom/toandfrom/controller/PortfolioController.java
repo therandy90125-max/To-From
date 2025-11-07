@@ -189,5 +189,45 @@ public class PortfolioController {
             ));
         }
     }
+    
+    /**
+     * AI Agent 워크플로우를 사용한 최적화
+     * 
+     * Flow:
+     * 1. Form Submission → 2. AI Agent → 3. Optimization → 
+     * 4. Risk Analysis → 5. Conditional Branching → 6. Action
+     */
+    @PostMapping("/optimize/workflow")
+    public ResponseEntity<Map<String, Object>> optimizeWithWorkflow(@RequestBody Map<String, Object> request) {
+        try {
+            Map<String, Object> result = portfolioService.optimizeWithWorkflow(request);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "success", false,
+                "error", "워크플로우 최적화 실패: " + e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * 워크플로우 상태 조회
+     */
+    @GetMapping("/workflow/{workflowId}/status")
+    public ResponseEntity<Map<String, Object>> getWorkflowStatus(@PathVariable String workflowId) {
+        try {
+            Map<String, Object> result = portfolioService.getWorkflowStatus(workflowId);
+            
+            if (result.containsKey("error")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(result);
+            }
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "error", "상태 조회 실패: " + e.getMessage()
+            ));
+        }
+    }
 }
 

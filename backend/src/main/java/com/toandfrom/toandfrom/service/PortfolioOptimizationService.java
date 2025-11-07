@@ -132,5 +132,42 @@ public class PortfolioOptimizationService {
             return errorResponse;
         }
     }
+    
+    /**
+     * AI Agent 워크플로우를 사용한 최적화
+     */
+    public Map<String, Object> optimizeWithWorkflow(Map<String, Object> request) {
+        String url = flaskApiUrl + "/api/optimize/workflow";
+        
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "워크플로우 실패: " + e.getMessage());
+            return errorResponse;
+        }
+    }
+    
+    /**
+     * 워크플로우 상태 조회
+     */
+    public Map<String, Object> getWorkflowStatus(String workflowId) {
+        String url = flaskApiUrl + "/api/workflow/" + workflowId + "/status";
+        
+        try {
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "상태 조회 실패: " + e.getMessage());
+            return errorResponse;
+        }
+    }
 }
 
