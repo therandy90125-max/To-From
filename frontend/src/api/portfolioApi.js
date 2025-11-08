@@ -22,12 +22,26 @@ export async function optimizePortfolio(inputData) {
 
 /**
  * 가중치 기반 포트폴리오 최적화
+ * Spring Boot 실패 시 Flask로 자동 fallback
  */
 export async function optimizePortfolioWithWeights(inputData) {
   try {
+    // Spring Boot 시도
     const response = await axios.post(`${API_BASE_URL}/optimize/with-weights`, inputData);
     return response.data;
   } catch (error) {
+    // Spring Boot 실패 시 Flask로 직접 연결
+    if (error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
+      console.log('⚠️ Spring Boot 연결 실패, Flask로 직접 연결 시도...');
+      try {
+        // Flask도 같은 경로를 지원하므로 동일한 경로 사용
+        const flaskResponse = await axios.post('http://localhost:5000/api/portfolio/optimize', inputData);
+        return flaskResponse.data;
+      } catch (flaskError) {
+        console.error('❌ Flask 연결도 실패:', flaskError);
+        throw new Error('Backend services unavailable. Please start Flask (port 5000) or Spring Boot (port 8080).');
+      }
+    }
     console.error('Optimization with weights error:', error);
     throw error;
   }

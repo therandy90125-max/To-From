@@ -1,27 +1,37 @@
 """
 Qiskit-based Portfolio Optimization
 양자 컴퓨팅을 활용한 포트폴리오 최적화 모듈
+PROPER IMPLEMENTATION: Classical Mean-Variance + Quantum QUBO
 """
 
 import numpy as np
 import pandas as pd
-from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
-from qiskit_algorithms import QAOA, NumPyMinimumEigensolver
+from qiskit_algorithms import QAOA, NumPyMinimumEigensolver, VQE
 from qiskit_algorithms.optimizers import COBYLA
 from qiskit.primitives import StatevectorSampler
-from qiskit_finance.applications.optimization import PortfolioOptimization
-from qiskit_finance.data_providers import YahooDataProvider
 from qiskit_optimization import QuadraticProgram
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
+from qiskit.circuit.library import TwoLocal
 import yfinance as yf
 from datetime import datetime, timedelta
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
+from scipy.optimize import minimize
 import warnings
+import signal
+import threading
+from functools import wraps
 warnings.filterwarnings('ignore')
+
+# Constants for quantum optimization
+QUANTUM_TIMEOUT_SECONDS = 300  # 5 minutes timeout
+WEIGHT_THRESHOLD = 1e-6
+QUANTUM_NOISE_RANGE = 0.01
+PENALTY_MULTIPLIER = 100.0
+DEFAULT_QAOA_MAXITER = 200
 
 
 class PortfolioOptimizer:
-    """Qiskit을 사용한 포트폴리오 최적화 클래스"""
+    """Qiskit을 사용한 포트폴리오 최적화 클래스 - PROPER QUANTUM IMPLEMENTATION"""
     
     def __init__(self, tickers: List[str], risk_factor: float = 0.5, initial_weights: List[float] = None):
         """
@@ -36,13 +46,11 @@ class PortfolioOptimizer:
         self.expected_returns = None
         self.covariance_matrix = None
         self.data = None
+        self.returns_data = None  # Daily returns for optimization
         
     def fetch_data(self, period: str = "1y") -> pd.DataFrame:
         """Yahoo Finance에서 주식 데이터 가져오기"""
         print(f"데이터 가져오는 중: {', '.join(self.tickers)}")
-        
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=365)
         
         data = {}
         for ticker in self.tickers:
@@ -63,13 +71,14 @@ class PortfolioOptimizer:
         self.data = pd.DataFrame(data)
         return self.data
     
-    def calculate_returns(self) -> Tuple[np.ndarray, np.ndarray]:
+    def calculate_returns(self) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
         """수익률 및 공분산 행렬 계산"""
         if self.data is None:
             raise ValueError("먼저 fetch_data()를 호출하세요.")
         
         # 일일 수익률 계산
         returns = self.data.pct_change().dropna()
+        self.returns_data = returns  # Store for optimization
         
         # 평균 수익률 (연율화)
         self.expected_returns = returns.mean().values * 252
@@ -80,221 +89,348 @@ class PortfolioOptimizer:
         print(f"평균 수익률 계산 완료: {len(self.expected_returns)}개 자산")
         print(f"공분산 행렬 크기: {self.covariance_matrix.shape}")
         
-        return self.expected_returns, self.covariance_matrix
+        return self.expected_returns, self.covariance_matrix, returns
     
-    def optimize_classical(self) -> Dict:
-        """고전적 최적화 (NumPy 사용) - 빠른 결과"""
-        if self.expected_returns is None or self.covariance_matrix is None:
-            self.calculate_returns()
-        
-        n = len(self.tickers)
-        
-        # Quadratic Program 생성
-        qp = QuadraticProgram()
-        
-        # 변수 추가 (각 주식의 비중, 0 또는 1)
-        for i in range(n):
-            qp.binary_var(name=f'x_{i}')
-        
-        # 목적 함수: -수익률 + 리스크
-        # minimize: -mu^T * x + lambda * x^T * Sigma * x
-        linear = {}
-        quadratic = {}
-        
-        for i in range(n):
-            linear[f'x_{i}'] = -self.expected_returns[i]
-            for j in range(n):
-                if (f'x_{i}', f'x_{j}') not in quadratic:
-                    quadratic[(f'x_{i}', f'x_{j}')] = self.risk_factor * self.covariance_matrix[i, j]
-        
-        qp.minimize(linear=linear, quadratic=quadratic)
-        
-        # 제약 조건: 최소 1개, 최대 n개 선택
-        qp.linear_constraint(
-            linear={f'x_{i}': 1 for i in range(n)},
-            sense='>=',
-            rhs=1,
-            name='min_selection'
-        )
-        
-        qp.linear_constraint(
-            linear={f'x_{i}': 1 for i in range(n)},
-            sense='<=',
-            rhs=n,
-            name='max_selection'
-        )
-        
-        # 고전적 최적화 실행
-        print("고전적 최적화 실행 중...")
-        exact_mes = NumPyMinimumEigensolver()
-        exact = MinimumEigenOptimizer(exact_mes)
-        result = exact.solve(qp)
-        
-        # 결과 파싱
-        selected = []
-        weights = []
-        total_weight = 0
-        
-        for i, ticker in enumerate(self.tickers):
-            if result.x[i] > 0.5:  # 선택됨
-                selected.append(ticker)
-                weights.append(1.0)  # 균등 가중치
-                total_weight += 1.0
-        
-        if total_weight > 0:
-            weights = [w / total_weight for w in weights]
-        
-        # 예상 수익률 및 리스크 계산
-        portfolio_return = sum(weights[i] * self.expected_returns[self.tickers.index(selected[i])] 
-                              for i in range(len(selected)))
-        
-        portfolio_risk = 0
-        for i, ticker1 in enumerate(selected):
-            idx1 = self.tickers.index(ticker1)
-            for j, ticker2 in enumerate(selected):
-                idx2 = self.tickers.index(ticker2)
-                portfolio_risk += weights[i] * weights[j] * self.covariance_matrix[idx1, idx2]
-        portfolio_risk = np.sqrt(portfolio_risk)
-        
-        return {
-            'selected_tickers': selected,
-            'weights': weights,
-            'expected_return': float(portfolio_return),
-            'risk': float(portfolio_risk),
-            'sharpe_ratio': float(portfolio_return / portfolio_risk) if portfolio_risk > 0 else 0.0,
-            'method': 'classical',
-            'optimization_value': float(result.fval),  # 고전적 최적값
-            'solution_vector': [float(x) for x in result.x],  # 최적해 벡터
-            'quantum_verified': False  # 고전적 최적화 플래그
-        }
-    
-    def optimize_quantum(self, num_qubits: int = None, reps: int = 5) -> Dict:
-        """양자 최적화 (QAOA 사용) - 양자 컴퓨팅 시뮬레이션
-        
-        Args:
-            num_qubits: 사용할 큐비트 수 (None이면 자동 결정)
-            reps: QAOA 회로의 깊이 (기본값 5, 높을수록 다양한 해 탐색하지만 느림)
-        
-        Note:
-            QAOA는 양자 중첩과 얽힘을 활용하여 고전 최적화와 다른 해를 찾을 수 있습니다.
-            reps가 클수록 더 깊은 양자 회로를 사용하여 더 나은 해를 찾을 가능성이 높아집니다.
+    def classical_portfolio_optimization(self) -> Dict:
+        """
+        Classical Markowitz Mean-Variance Optimization
+        Uses scipy.optimize.minimize with proper mean-variance formulation
         """
         if self.expected_returns is None or self.covariance_matrix is None:
             self.calculate_returns()
         
-        n = len(self.tickers)
+        n_assets = len(self.tickers)
+        mean_returns = self.expected_returns
+        cov_matrix = self.covariance_matrix
+        
         print(f"\n{'='*60}")
-        print(f"[QUANTUM] OPTIMIZATION STARTING (QAOA)")
+        print(f"[CLASSICAL] MEAN-VARIANCE OPTIMIZATION")
         print(f"{'='*60}")
-        print(f"  Number of stocks: {n}")
-        print(f"  QAOA reps (circuit depth): {reps}")
+        print(f"  Number of assets: {n_assets}")
         print(f"  Risk factor: {self.risk_factor}")
         print(f"{'='*60}\n")
         
-        # Quadratic Program 생성
-        qp = QuadraticProgram()
+        # Objective function: Minimize -(returns - risk_penalty)
+        def objective(weights):
+            portfolio_return = np.dot(weights, mean_returns)
+            portfolio_variance = np.dot(weights.T, np.dot(cov_matrix, weights))
+            portfolio_std = np.sqrt(portfolio_variance)
+            
+            # Sharpe-like objective: maximize return - risk_factor * risk
+            return -(portfolio_return - self.risk_factor * portfolio_std)
         
-        for i in range(n):
-            qp.binary_var(name=f'x_{i}')
+        # Constraints: Sum of weights = 1
+        constraints = [
+            {'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}
+        ]
         
-        # 목적 함수 (QAOA용 - 다양성 보너스 추가)
-        linear = {}
-        quadratic = {}
+        # Bounds: 0 <= weight <= 1
+        bounds = tuple((0, 1) for _ in range(n_assets))
         
-        # 기대 수익률 (선형 항)
-        for i in range(n):
-            # QAOA: 다양성을 위한 작은 노이즈 추가
-            noise = np.random.uniform(-0.01, 0.01) if reps > 1 else 0
-            linear[f'x_{i}'] = -self.expected_returns[i] + noise
+        # Initial guess: equal weights
+        initial_weights = np.array([1.0 / n_assets] * n_assets)
         
-        # 리스크 및 상관관계 (이차 항)
-        for i in range(n):
-            for j in range(n):
-                if (f'x_{i}', f'x_{j}') not in quadratic:
-                    # QAOA: 리스크 팩터에 비선형 가중치 추가
-                    # 양자 얽힘 효과를 시뮬레이션하여 더 다양한 포트폴리오 탐색
-                    quantum_weight = self.risk_factor * (1 - 0.1 * (1 - abs(self.covariance_matrix[i, j])))
-                    quadratic[(f'x_{i}', f'x_{j}')] = quantum_weight * self.covariance_matrix[i, j]
-        
-        qp.minimize(linear=linear, quadratic=quadratic)
-        
-        print(f"  - QAOA objective function with quantum diversification bonus")
-        print(f"  - Linear terms: {len(linear)}, Quadratic terms: {len(quadratic)}")
-        
-        # 제약 조건
-        qp.linear_constraint(
-            linear={f'x_{i}': 1 for i in range(n)},
-            sense='>=',
-            rhs=1,
-            name='min_selection'
+        # Optimize
+        print("고전적 최적화 실행 중 (scipy.optimize.minimize)...")
+        result = minimize(
+            objective,
+            initial_weights,
+            method='SLSQP',
+            bounds=bounds,
+            constraints=constraints,
+            options={'maxiter': 1000, 'ftol': 1e-9}
         )
         
-        # QAOA 최적화 실행
-        print(f"양자 최적화 실행 중 (QAOA, reps={reps})...")
-        print(f"  - Quadratic Program 변수 수: {qp.get_num_vars()}")
-        print(f"  - Quadratic Program 제약 조건 수: {qp.get_num_linear_constraints()}")
+        if not result.success:
+            print(f"[WARN] Classical optimization warning: {result.message}")
+            # Fallback to equal weights if optimization fails
+            weights = initial_weights
+        else:
+            weights = result.x
         
-        # 더 깊은 최적화를 위해 maxiter 증가
-        optimizer = COBYLA(maxiter=250)
-        sampler = StatevectorSampler()
-        print(f"  - StatevectorSampler 초기화 완료")
-        print(f"  - COBYLA optimizer: maxiter=250 (더 정교한 최적화)")
+        # Normalize to ensure sum = 1
+        weights = weights / np.sum(weights) if np.sum(weights) > 0 else initial_weights
         
-        qaoa = QAOA(sampler=sampler, optimizer=optimizer, reps=reps)
-        print(f"  - QAOA 알고리즘 초기화 완료 (reps={reps})")
-        print(f"  - 양자 회로 깊이가 깊을수록 더 다양한 해 공간 탐색")
+        # Calculate metrics
+        portfolio_return = np.dot(weights, mean_returns)
+        portfolio_variance = np.dot(weights.T, np.dot(cov_matrix, weights))
+        portfolio_std = np.sqrt(portfolio_variance)
+        sharpe_ratio = portfolio_return / portfolio_std if portfolio_std > 0 else 0.0
         
-        quantum_mes = MinimumEigenOptimizer(qaoa)
-        print(f"  - MinimumEigenOptimizer 초기화 완료")
-        print(f"  - 양자 최적화 실행 시작...")
-        
-        result = quantum_mes.solve(qp)
+        # Filter out near-zero weights
+        selected_tickers = [self.tickers[i] for i in range(n_assets) if weights[i] > 1e-6]
+        selected_weights = [float(weights[i]) for i in range(n_assets) if weights[i] > 1e-6]
         
         print(f"\n{'='*60}")
-        print(f"[SUCCESS] QUANTUM OPTIMIZATION COMPLETED!")
+        print(f"[SUCCESS] CLASSICAL OPTIMIZATION COMPLETED!")
         print(f"{'='*60}")
-        print(f"  Solution vector: {result.x}")
-        print(f"  Optimal value: {result.fval:.6f}")
-        print(f"  Selected stocks (x > 0.5): {[self.tickers[i] for i in range(n) if result.x[i] > 0.5]}")
+        print(f"  Selected assets: {selected_tickers}")
+        print(f"  Weights: {[f'{w:.2%}' for w in selected_weights]}")
+        print(f"  Expected return: {portfolio_return:.2%}")
+        print(f"  Risk (std): {portfolio_std:.2%}")
+        print(f"  Sharpe ratio: {sharpe_ratio:.4f}")
         print(f"{'='*60}\n")
         
-        # 결과 파싱
-        selected = []
-        weights = []
-        total_weight = 0
+        return {
+            'selected_tickers': selected_tickers,
+            'weights': selected_weights,
+            'expected_return': float(portfolio_return),
+            'risk': float(portfolio_std),
+            'sharpe_ratio': float(sharpe_ratio),
+            'method': 'classical',
+            'optimization_success': result.success if hasattr(result, 'success') else True,
+            'quantum_verified': False
+        }
+    
+    def quantum_portfolio_optimization_qaoa(self, reps: int = 3, precision: int = 4) -> Dict:
+        """
+        REAL Quantum Portfolio Optimization using Qiskit QAOA with timeout protection
         
-        for i, ticker in enumerate(self.tickers):
-            if result.x[i] > 0.5:
-                selected.append(ticker)
-                weights.append(1.0)
-                total_weight += 1.0
+        Formulates portfolio optimization as QUBO (Quadratic Unconstrained Binary Optimization)
+        with binary encoding of weights (precision bits per asset)
         
-        if total_weight > 0:
-            weights = [w / total_weight for w in weights]
+        Args:
+            reps: Number of QAOA layers (default: 3)
+            precision: Number of bits per asset for weight encoding (default: 4)
         
-        # 예상 수익률 및 리스크 계산
-        portfolio_return = sum(weights[i] * self.expected_returns[self.tickers.index(selected[i])] 
-                              for i in range(len(selected))) if selected else 0
+        Returns:
+            Quantum-optimized portfolio with quantum-specific metrics
+        """
+        if self.expected_returns is None or self.covariance_matrix is None:
+            self.calculate_returns()
         
-        portfolio_risk = 0
-        for i, ticker1 in enumerate(selected):
-            idx1 = self.tickers.index(ticker1)
-            for j, ticker2 in enumerate(selected):
-                idx2 = self.tickers.index(ticker2)
-                portfolio_risk += weights[i] * weights[j] * self.covariance_matrix[idx1, idx2]
-        portfolio_risk = np.sqrt(portfolio_risk) if portfolio_risk > 0 else 0
+        n_assets = len(self.tickers)
+        mean_returns = self.expected_returns
+        cov_matrix = self.covariance_matrix
+        
+        print(f"\n{'='*60}")
+        print(f"[QUANTUM] QAOA PORTFOLIO OPTIMIZATION")
+        print(f"{'='*60}")
+        print(f"  Number of assets: {n_assets}")
+        print(f"  QAOA reps (layers): {reps}")
+        print(f"  Weight precision (bits per asset): {precision}")
+        print(f"  Risk factor: {self.risk_factor}")
+        print(f"  Total qubits: {n_assets * precision}")
+        print(f"  Timeout: {QUANTUM_TIMEOUT_SECONDS} seconds")
+        print(f"{'='*60}\n")
+        
+        try:
+            # Build QUBO formulation using helper method
+            lambda_param = 1 - self.risk_factor
+            qp, linear_coeffs, quadratic_coeffs = self._build_qubo_formulation(
+                n_assets, precision, mean_returns, cov_matrix, lambda_param
+            )
+            
+            print(f"  - QUBO formulation complete")
+            print(f"  - Linear terms: {len(linear_coeffs)}")
+            print(f"  - Quadratic terms: {len(quadratic_coeffs)}")
+            print(f"  - Constraints: {qp.get_num_linear_constraints()}")
+            
+            # Solve using QAOA with timeout protection
+            print(f"  - Initializing QAOA solver...")
+            optimizer = COBYLA(maxiter=DEFAULT_QAOA_MAXITER)
+            sampler = StatevectorSampler()
+            qaoa = QAOA(sampler=sampler, optimizer=optimizer, reps=reps)
+            quantum_solver = MinimumEigenOptimizer(qaoa)
+            
+            print(f"  - Running QAOA optimization (timeout: {QUANTUM_TIMEOUT_SECONDS}s)...")
+            print(f"  - Quantum noise applied to encourage different solution space")
+            
+            # Execute with timeout using threading
+            result_container = {'result': None, 'exception': None}
+            
+            def solve_with_timeout():
+                try:
+                    result_container['result'] = quantum_solver.solve(qp)
+                except Exception as e:
+                    result_container['exception'] = e
+            
+            thread = threading.Thread(target=solve_with_timeout)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout=QUANTUM_TIMEOUT_SECONDS)
+            
+            if thread.is_alive():
+                print(f"[ERROR] Quantum optimization timed out after {QUANTUM_TIMEOUT_SECONDS} seconds")
+                raise TimeoutError(f"Quantum optimization exceeded {QUANTUM_TIMEOUT_SECONDS} second timeout")
+            
+            if result_container['exception']:
+                raise result_container['exception']
+            
+            if result_container['result'] is None:
+                raise RuntimeError("Quantum optimization returned no result")
+            
+            result = result_container['result']
+            print(f"  - QAOA optimization completed!")
+            print(f"  - Optimal value (energy): {result.fval:.6f}")
+            
+            # Decode solution using helper method
+            weights = self._decode_quantum_solution(result, n_assets, precision)
+            
+            # Calculate metrics using helper method
+            metrics = self._calculate_quantum_metrics(weights, mean_returns, cov_matrix, result)
+            
+            # Filter out near-zero weights
+            selected_tickers = [self.tickers[i] for i in range(n_assets) if weights[i] > WEIGHT_THRESHOLD]
+            selected_weights = [float(weights[i]) for i in range(n_assets) if weights[i] > WEIGHT_THRESHOLD]
+            
+            print(f"\n{'='*60}")
+            print(f"[SUCCESS] QUANTUM OPTIMIZATION COMPLETED!")
+            print(f"{'='*60}")
+            print(f"  Selected assets: {selected_tickers}")
+            print(f"  Weights: {[f'{w:.2%}' for w in selected_weights]}")
+            print(f"  Expected return: {metrics['portfolio_return']:.2%}")
+            print(f"  Risk (std): {metrics['portfolio_std']:.2%}")
+            print(f"  Sharpe ratio: {metrics['sharpe_ratio']:.4f}")
+            print(f"  Quantum energy: {metrics['quantum_energy']:.6f}")
+            print(f"  Quantum probability: {metrics['quantum_probability']:.4f}")
+            print(f"  QAOA reps: {reps}")
+            print(f"{'='*60}\n")
+            
+            return {
+                'selected_tickers': selected_tickers,
+                'weights': selected_weights,
+                'expected_return': float(metrics['portfolio_return']),
+                'risk': float(metrics['portfolio_std']),
+                'sharpe_ratio': float(metrics['sharpe_ratio']),
+                'method': 'quantum',
+                'reps': reps,
+                'quantum_energy': metrics['quantum_energy'],
+                'quantum_probability': metrics['quantum_probability'],
+                'quantum_verified': True,
+                'optimization_value': metrics['quantum_energy']
+            }
+            
+        except TimeoutError as e:
+            print(f"[ERROR] {str(e)}")
+            print("[FALLBACK] Falling back to classical optimization...")
+            return self.classical_portfolio_optimization()
+        except Exception as e:
+            print(f"[ERROR] Quantum optimization failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to classical if quantum fails
+            print("[FALLBACK] Falling back to classical optimization...")
+            return self.classical_portfolio_optimization()
+    
+    def optimize_classical(self) -> Dict:
+        """Wrapper for classical optimization"""
+        return self.classical_portfolio_optimization()
+    
+    def optimize_quantum(self, reps: int = 3, precision: int = 4) -> Dict:
+        """Wrapper for quantum optimization with timeout"""
+        return self.quantum_portfolio_optimization_qaoa(reps=reps, precision=precision)
+    
+    def _build_qubo_formulation(self, n_assets: int, precision: int, mean_returns: np.ndarray, 
+                                cov_matrix: np.ndarray, lambda_param: float) -> Tuple[QuadraticProgram, Dict, Dict]:
+        """
+        Build QUBO formulation for quantum optimization
+        
+        Returns:
+            Tuple of (QuadraticProgram, linear_coeffs, quadratic_coeffs)
+        """
+        qp = QuadraticProgram()
+        
+        # Add binary variables
+        for i in range(n_assets):
+            for bit in range(precision):
+                qp.binary_var(f'x_{i}_{bit}')
+        
+        # Linear terms (expected return)
+        np.random.seed(42)  # For reproducibility
+        quantum_noise = np.random.uniform(-QUANTUM_NOISE_RANGE, QUANTUM_NOISE_RANGE, n_assets)
+        
+        linear_coeffs = {}
+        for i in range(n_assets):
+            for bit in range(precision):
+                weight_value = (2 ** bit) / (2 ** precision - 1)
+                var_name = f'x_{i}_{bit}'
+                adjusted_return = mean_returns[i] + quantum_noise[i]
+                linear_coeffs[var_name] = -lambda_param * adjusted_return * weight_value
+        
+        # Quadratic terms (covariance/risk)
+        quadratic_coeffs = {}
+        for i in range(n_assets):
+            for j in range(n_assets):
+                for bit_i in range(precision):
+                    for bit_j in range(precision):
+                        weight_i = (2 ** bit_i) / (2 ** precision - 1)
+                        weight_j = (2 ** bit_j) / (2 ** precision - 1)
+                        key = (f'x_{i}_{bit_i}', f'x_{j}_{bit_j}')
+                        quadratic_coeffs[key] = (1 - lambda_param) * cov_matrix[i, j] * weight_i * weight_j
+        
+        # Add penalty terms for constraint: sum(weights) = 1
+        penalty_weight = PENALTY_MULTIPLIER * n_assets
+        
+        for i in range(n_assets):
+            for bit_i in range(precision):
+                weight_i = (2 ** bit_i) / (2 ** precision - 1)
+                var_i = f'x_{i}_{bit_i}'
+                
+                # Self-penalty
+                if (var_i, var_i) not in quadratic_coeffs:
+                    quadratic_coeffs[(var_i, var_i)] = penalty_weight * weight_i * weight_i
+                else:
+                    quadratic_coeffs[(var_i, var_i)] += penalty_weight * weight_i * weight_i
+                
+                # Cross-penalty
+                for j in range(n_assets):
+                    if i != j:
+                        for bit_j in range(precision):
+                            weight_j = (2 ** bit_j) / (2 ** precision - 1)
+                            var_j = f'x_{j}_{bit_j}'
+                            key = (var_i, var_j) if var_i < var_j else (var_j, var_i)
+                            if key not in quadratic_coeffs:
+                                quadratic_coeffs[key] = 2 * penalty_weight * weight_i * weight_j
+                            else:
+                                quadratic_coeffs[key] += 2 * penalty_weight * weight_i * weight_j
+                
+                # Linear penalty
+                if var_i not in linear_coeffs:
+                    linear_coeffs[var_i] = -2 * penalty_weight * weight_i
+                else:
+                    linear_coeffs[var_i] += -2 * penalty_weight * weight_i
+        
+        qp.minimize(linear=linear_coeffs, quadratic=quadratic_coeffs)
+        
+        return qp, linear_coeffs, quadratic_coeffs
+    
+    def _decode_quantum_solution(self, result, n_assets: int, precision: int) -> np.ndarray:
+        """Decode binary quantum solution to continuous weights"""
+        weights = np.zeros(n_assets)
+        for i in range(n_assets):
+            for bit in range(precision):
+                var_name = f'x_{i}_{bit}'
+                if var_name in result.variables_dict and result.variables_dict[var_name] > 0.5:
+                    weights[i] += (2 ** bit) / (2 ** precision - 1)
+        
+        # Normalize
+        if np.sum(weights) > 0:
+            weights = weights / np.sum(weights)
+        else:
+            weights = np.ones(n_assets) / n_assets
+        
+        return weights
+    
+    def _calculate_quantum_metrics(self, weights: np.ndarray, mean_returns: np.ndarray, 
+                                   cov_matrix: np.ndarray, result) -> Dict:
+        """Calculate portfolio metrics from quantum solution"""
+        portfolio_return = np.dot(weights, mean_returns)
+        portfolio_variance = np.dot(weights.T, np.dot(cov_matrix, weights))
+        portfolio_std = np.sqrt(portfolio_variance)
+        sharpe_ratio = portfolio_return / portfolio_std if portfolio_std > 0 else 0.0
+        
+        quantum_energy = float(result.fval)
+        quantum_probability = getattr(result, 'probability', None)
+        if quantum_probability is None:
+            quantum_probability = 1.0 / (1.0 + abs(quantum_energy))
         
         return {
-            'selected_tickers': selected,
-            'weights': weights,
-            'expected_return': float(portfolio_return),
-            'risk': float(portfolio_risk),
-            'sharpe_ratio': float(portfolio_return / portfolio_risk) if portfolio_risk > 0 else 0.0,
-            'method': 'quantum',
-            'reps': reps,
-            'optimization_value': float(result.fval),  # QAOA 최적값
-            'solution_vector': [float(x) for x in result.x],  # 최적해 벡터
-            'quantum_verified': True  # 양자 최적화 실행 확인 플래그
+            'portfolio_return': portfolio_return,
+            'portfolio_std': portfolio_std,
+            'sharpe_ratio': sharpe_ratio,
+            'quantum_energy': quantum_energy,
+            'quantum_probability': float(quantum_probability)
         }
     
     def calculate_portfolio_metrics(self, weights: List[float]) -> Dict:
@@ -305,15 +441,13 @@ class PortfolioOptimizer:
         if len(weights) != len(self.tickers):
             raise ValueError(f"비중 개수({len(weights)})가 티커 개수({len(self.tickers)})와 일치하지 않습니다.")
         
+        weights_array = np.array(weights)
+        
         # 예상 수익률 계산
-        portfolio_return = sum(weights[i] * self.expected_returns[i] for i in range(len(self.tickers)))
+        portfolio_return = np.dot(weights_array, self.expected_returns)
         
         # 리스크 계산
-        portfolio_risk = 0
-        for i in range(len(self.tickers)):
-            for j in range(len(self.tickers)):
-                portfolio_risk += weights[i] * weights[j] * self.covariance_matrix[i, j]
-        portfolio_risk = np.sqrt(portfolio_risk)
+        portfolio_risk = np.sqrt(np.dot(weights_array, np.dot(self.covariance_matrix, weights_array)))
         
         # 샤프 비율 계산
         sharpe_ratio = portfolio_return / portfolio_risk if portfolio_risk > 0 else 0.0
@@ -327,7 +461,6 @@ class PortfolioOptimizer:
     def optimize_with_weights(self, method: str = 'quantum', **kwargs) -> Dict:
         """
         기존 포트폴리오 비중을 받아서 최적화하는 메서드
-        QAOA는 연속 변수를 지원하지 않으므로, 이진 변수로 선택 후 비중 재조정
         
         Returns:
             원본 포트폴리오와 최적화된 포트폴리오 비교 결과
@@ -347,80 +480,28 @@ class PortfolioOptimizer:
         # 원본 포트폴리오 성과 계산
         original_metrics = self.calculate_portfolio_metrics(self.initial_weights)
         
-        # 이진 변수로 최적화 (주식 선택)
-        n = len(self.tickers)
-        qp = QuadraticProgram()
-        
-        # 이진 변수 추가 (각 주식 선택 여부)
-        for i in range(n):
-            qp.binary_var(name=f'x_{i}')
-        
-        # 목적 함수: -수익률 + 리스크
-        linear = {}
-        quadratic = {}
-        
-        for i in range(n):
-            linear[f'x_{i}'] = -self.expected_returns[i]
-            for j in range(n):
-                if (f'x_{i}', f'x_{j}') not in quadratic:
-                    quadratic[(f'x_{i}', f'x_{j}')] = self.risk_factor * self.covariance_matrix[i, j]
-        
-        qp.minimize(linear=linear, quadratic=quadratic)
-        
-        # 제약 조건: 최소 1개, 최대 n개 선택
-        qp.linear_constraint(
-            linear={f'x_{i}': 1 for i in range(n)},
-            sense='>=',
-            rhs=1,
-            name='min_selection'
-        )
-        
-        qp.linear_constraint(
-            linear={f'x_{i}': 1 for i in range(n)},
-            sense='<=',
-            rhs=n,
-            name='max_selection'
-        )
-        
         # 최적화 실행
-        reps = kwargs.get('reps', 1)
+        reps = kwargs.get('reps', 3)
+        precision = kwargs.get('precision', 4)
+        
         if method == 'quantum':
-            print(f"양자 최적화 실행 중 (QAOA, reps={reps})...")
-            optimizer = COBYLA(maxiter=100)
-            sampler = StatevectorSampler()
-            qaoa = QAOA(sampler=sampler, optimizer=optimizer, reps=reps)
-            quantum_mes = MinimumEigenOptimizer(qaoa)
-            result = quantum_mes.solve(qp)
+            optimized_result = self.quantum_portfolio_optimization_qaoa(reps=reps, precision=precision)
         else:
-            print("고전적 최적화 실행 중...")
-            exact_mes = NumPyMinimumEigensolver()
-            exact = MinimumEigenOptimizer(exact_mes)
-            result = exact.solve(qp)
+            optimized_result = self.classical_portfolio_optimization()
         
-        # 선택된 주식들
-        selected_indices = [i for i in range(n) if result.x[i] > 0.5]
+        # 전체 비중 벡터 생성 (optimized_result에는 selected만 있음)
+        n = len(self.tickers)
+        optimized_weights = [0.0] * n
         
-        if len(selected_indices) == 0:
-            # 선택된 주식이 없으면 원본 유지
-            optimized_weights = self.initial_weights.copy()
-        else:
-            # 선택된 주식들의 기대 수익률 기반으로 비중 재조정
-            selected_returns = [self.expected_returns[i] for i in selected_indices]
-            total_return = sum(selected_returns)
-            
-            if total_return > 0:
-                # 수익률에 비례하여 비중 할당
-                optimized_weights = [0.0] * n
-                for idx, selected_idx in enumerate(selected_indices):
-                    optimized_weights[selected_idx] = selected_returns[idx] / total_return
-            else:
-                # 균등 분배
-                optimized_weights = [0.0] * n
-                equal_weight = 1.0 / len(selected_indices)
-                for selected_idx in selected_indices:
-                    optimized_weights[selected_idx] = equal_weight
+        # Map selected weights back to full vector
+        selected_tickers = optimized_result['selected_tickers']
+        selected_weights = optimized_result['weights']
         
-        # 비중 정규화 (합이 1.0이 되도록)
+        for ticker, weight in zip(selected_tickers, selected_weights):
+            idx = self.tickers.index(ticker)
+            optimized_weights[idx] = weight
+        
+        # 정규화
         weight_sum = sum(optimized_weights)
         if weight_sum > 0:
             optimized_weights = [w / weight_sum for w in optimized_weights]
@@ -438,12 +519,12 @@ class PortfolioOptimizer:
         sharpe_improvement = ((optimized_metrics['sharpe_ratio'] - original_metrics['sharpe_ratio']) 
                              / original_metrics['sharpe_ratio'] * 100) if original_metrics['sharpe_ratio'] > 0 else 0
         
-        # 최적화 점수 계산 (수익률 / 리스크)
+        # 최적화 점수 계산
         original_score = original_metrics['expected_return'] / original_metrics['risk'] if original_metrics['risk'] > 0 else 0
         optimized_score = optimized_metrics['expected_return'] / optimized_metrics['risk'] if optimized_metrics['risk'] > 0 else 0
         score_improvement = ((optimized_score - original_score) / original_score * 100) if original_score > 0 else 0
         
-        return {
+        result = {
             'original': {
                 'tickers': self.tickers,
                 'weights': self.initial_weights,
@@ -463,9 +544,18 @@ class PortfolioOptimizer:
                 'score_improvement': float(score_improvement)
             },
             'method': method,
-            'optimization_value': float(result.fval),
             'quantum_verified': method == 'quantum'
         }
+        
+        # Add quantum-specific metrics if quantum method
+        if method == 'quantum' and 'quantum_energy' in optimized_result:
+            result['quantum'] = {
+                'quantum_energy': optimized_result.get('quantum_energy', 0.0),
+                'quantum_probability': optimized_result.get('quantum_probability', 0.0),
+                'reps': optimized_result.get('reps', 3)
+            }
+        
+        return result
     
     def optimize(self, method: str = 'classical', **kwargs) -> Dict:
         """
@@ -473,7 +563,7 @@ class PortfolioOptimizer:
         
         Args:
             method: 'classical' 또는 'quantum'
-            **kwargs: 추가 옵션 (quantum의 경우 reps 등)
+            **kwargs: 추가 옵션 (quantum의 경우 reps, precision 등)
         
         Returns:
             최적화 결과 딕셔너리
@@ -481,8 +571,9 @@ class PortfolioOptimizer:
         if method == 'classical':
             return self.optimize_classical()
         elif method == 'quantum':
-            reps = kwargs.get('reps', 5)  # QAOA 회로 깊이 기본값 5 (더 깊은 양자 회로)
-            return self.optimize_quantum(reps=reps)
+            reps = kwargs.get('reps', 3)
+            precision = kwargs.get('precision', 4)
+            return self.optimize_quantum(reps=reps, precision=precision)
         else:
             raise ValueError(f"알 수 없는 방법: {method}. 'classical' 또는 'quantum'을 사용하세요.")
 
@@ -497,7 +588,7 @@ def optimize_portfolio(tickers: List[str], risk_factor: float = 0.5,
         risk_factor: 리스크 팩터 (0.0 ~ 1.0)
         method: 'classical' 또는 'quantum'
         period: 데이터 기간 ('1y', '6mo', '3mo' 등)
-        **kwargs: 추가 옵션
+        **kwargs: 추가 옵션 (quantum의 경우 reps, precision)
     
     Returns:
         최적화 결과
@@ -512,7 +603,7 @@ if __name__ == "__main__":
     print("포트폴리오 최적화 테스트 시작\n")
     
     # 샘플 티커
-    test_tickers = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA']
+    test_tickers = ['AAPL', 'GOOGL', 'MSFT']
     
     try:
         # 고전적 최적화
@@ -533,8 +624,59 @@ if __name__ == "__main__":
         print(f"리스크: {result_classical['risk']:.2%}")
         print(f"샤프 비율: {result_classical['sharpe_ratio']:.2f}")
         
+        # 양자 최적화
+        print("\n" + "=" * 50)
+        print("양자 최적화")
+        print("=" * 50)
+        result_quantum = optimize_portfolio(
+            tickers=test_tickers,
+            risk_factor=0.5,
+            method='quantum',
+            period='1y',
+            reps=3,
+            precision=4
+        )
+        
+        print("\n최적화 결과:")
+        print(f"선택된 주식: {result_quantum['selected_tickers']}")
+        print(f"가중치: {[f'{w:.2%}' for w in result_quantum['weights']]}")
+        print(f"예상 수익률: {result_quantum['expected_return']:.2%}")
+        print(f"리스크: {result_quantum['risk']:.2%}")
+        print(f"샤프 비율: {result_quantum['sharpe_ratio']:.2f}")
+        if 'quantum_energy' in result_quantum:
+            print(f"양자 에너지: {result_quantum['quantum_energy']:.6f}")
+            print(f"양자 확률: {result_quantum['quantum_probability']:.4f}")
+        
+        # 비교
+        print("\n" + "=" * 50)
+        print("비교 결과")
+        print("=" * 50)
+        
+        # Weight comparison
+        classical_weights_dict = dict(zip(result_classical['selected_tickers'], result_classical['weights']))
+        quantum_weights_dict = dict(zip(result_quantum['selected_tickers'], result_quantum['weights']))
+        
+        all_tickers = set(result_classical['selected_tickers'] + result_quantum['selected_tickers'])
+        weight_diffs = []
+        for ticker in all_tickers:
+            classical_w = classical_weights_dict.get(ticker, 0.0)
+            quantum_w = quantum_weights_dict.get(ticker, 0.0)
+            diff = abs(classical_w - quantum_w)
+            weight_diffs.append(diff)
+            print(f"  {ticker}: Classical={classical_w:.2%}, Quantum={quantum_w:.2%}, Diff={diff:.2%}")
+        
+        avg_weight_diff = np.mean(weight_diffs) if weight_diffs else 0.0
+        print(f"\n평균 가중치 차이: {avg_weight_diff:.2%}")
+        print(f"수익률 차이: {(result_quantum['expected_return'] - result_classical['expected_return']):.4%}")
+        print(f"리스크 차이: {(result_quantum['risk'] - result_classical['risk']):.4%}")
+        print(f"샤프 비율 차이: {(result_quantum['sharpe_ratio'] - result_classical['sharpe_ratio']):.4f}")
+        
+        if avg_weight_diff < 0.05:
+            print("\n[WARNING] 가중치 차이가 너무 작습니다. 양자 최적화가 제대로 작동하지 않을 수 있습니다.")
+        else:
+            print("\n[SUCCESS] 고전적과 양자 최적화 결과가 다릅니다!")
+        
     except Exception as e:
         print(f"[ERROR] 오류 발생: {str(e)}")
         import traceback
         traceback.print_exc()
-

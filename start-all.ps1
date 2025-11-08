@@ -1,8 +1,17 @@
 Write-Host "🚀 QuantaFolio Navigator 시작 중..." -ForegroundColor Cyan
+Write-Host ""
 
 # 현재 스크립트의 디렉토리 가져오기
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $scriptPath) {
+    $scriptPath = $PSScriptRoot
+}
+if (-not $scriptPath) {
+    $scriptPath = Get-Location
+}
+
 Write-Host "프로젝트 경로: $scriptPath" -ForegroundColor Gray
+Write-Host ""
 
 # 1. Flask Backend 시작
 Write-Host "`n📦 Flask Backend 시작 (Port 5000)..." -ForegroundColor Yellow
@@ -10,8 +19,27 @@ $flaskPath = Join-Path $scriptPath "python-backend"
 Write-Host "Flask 경로: $flaskPath" -ForegroundColor Gray
 
 if (Test-Path $flaskPath) {
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$flaskPath'; python app.py"
-    Start-Sleep -Seconds 3
+    $venvPath = Join-Path $flaskPath "venv"
+    $venvActivate = Join-Path $venvPath "Scripts\Activate.ps1"
+    
+    # 가상환경 확인 및 생성
+    if (-not (Test-Path $venvPath)) {
+        Write-Host "   가상환경 생성 중..." -ForegroundColor Gray
+        Set-Location $flaskPath
+        python -m venv venv
+        Set-Location $scriptPath
+    }
+    
+    # Flask 시작 (가상환경 활성화)
+    if (Test-Path $venvActivate) {
+        $flaskCommand = "Set-Location '$flaskPath'; .\venv\Scripts\Activate.ps1; Write-Host '================================================' -ForegroundColor Cyan; Write-Host '   Flask Backend (Port 5000)' -ForegroundColor Cyan; Write-Host '================================================' -ForegroundColor Cyan; Write-Host ''; python app.py"
+    } else {
+        $flaskCommand = "Set-Location '$flaskPath'; Write-Host '================================================' -ForegroundColor Cyan; Write-Host '   Flask Backend (Port 5000)' -ForegroundColor Cyan; Write-Host '================================================' -ForegroundColor Cyan; Write-Host ''; python app.py"
+    }
+    
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", $flaskCommand
+    Write-Host "✅ Flask 서버 시작됨 (새 창)" -ForegroundColor Green
+    Start-Sleep -Seconds 5
 } else {
     Write-Host "❌ python-backend 폴더를 찾을 수 없습니다!" -ForegroundColor Red
 }
@@ -22,8 +50,21 @@ $backendPath = Join-Path $scriptPath "backend"
 Write-Host "Backend 경로: $backendPath" -ForegroundColor Gray
 
 if (Test-Path $backendPath) {
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; .\mvnw spring-boot:run"
-    Start-Sleep -Seconds 8
+    # Maven Wrapper 확인
+    $mvnw = Join-Path $backendPath "mvnw.cmd"
+    if (-not (Test-Path $mvnw)) {
+        $mvnw = Join-Path $backendPath "mvnw"
+    }
+    
+    if (Test-Path $mvnw) {
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backendPath'; Write-Host '================================================' -ForegroundColor Cyan; Write-Host '   Spring Boot Backend (Port 8080)' -ForegroundColor Cyan; Write-Host '================================================' -ForegroundColor Cyan; Write-Host ''; if (Test-Path '.\mvnw.cmd') { .\mvnw.cmd spring-boot:run } else { .\mvnw spring-boot:run }"
+        Write-Host "✅ Spring Boot 서버 시작됨 (새 창)" -ForegroundColor Green
+        Write-Host "   백엔드 시작 대기 중 (15초)..." -ForegroundColor Gray
+        Start-Sleep -Seconds 15
+    } else {
+        Write-Host "❌ Maven Wrapper를 찾을 수 없습니다!" -ForegroundColor Red
+        Write-Host "   Maven이 설치되어 있다면 'mvn spring-boot:run'을 사용하세요." -ForegroundColor Yellow
+    }
 } else {
     Write-Host "❌ backend 폴더를 찾을 수 없습니다!" -ForegroundColor Red
 }
@@ -34,7 +75,8 @@ $frontendPath = Join-Path $scriptPath "frontend"
 Write-Host "Frontend 경로: $frontendPath" -ForegroundColor Gray
 
 if (Test-Path $frontendPath) {
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$frontendPath'; npm run dev"
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$frontendPath'; Write-Host '================================================' -ForegroundColor Cyan; Write-Host '   React Frontend (Port 5173)' -ForegroundColor Cyan; Write-Host '================================================' -ForegroundColor Cyan; Write-Host ''; npm run dev"
+    Write-Host "✅ React 서버 시작됨 (새 창)" -ForegroundColor Green
     Start-Sleep -Seconds 10
 } else {
     Write-Host "❌ frontend 폴더를 찾을 수 없습니다!" -ForegroundColor Red

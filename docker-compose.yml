@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # 1. H2 Database (개발용)
+  database:
+    image: oscarfonts/h2:latest
+    container_name: quantafolio-db
+    ports:
+      - "8082:8082"   # H2 Console
+      - "9092:9092"   # H2 TCP
+    environment:
+      H2_OPTIONS: -ifNotExists
+    volumes:
+      - ./data/h2:/opt/h2-data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quantafolio-network
+
+  # 2. Flask Quantum Service
+  quantum-service:
+    build:
+      context: ./python-backend
+      dockerfile: Dockerfile
+    container_name: quantafolio-quantum
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY:-}
+    volumes:
+      - ./python-backend:/app
+      - /app/__pycache__
+    command: python app.py
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/api/health').raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - quantafolio-network
+
+  # 3. Spring Boot Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: quantafolio-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:h2:tcp://database:9092/mem:quantafolio
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.h2.Driver
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      - FLASK_API_URL=http://quantum-service:5000
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY:-}
+    volumes:
+      - ./backend:/app
+      - /app/target
+    depends_on:
+      quantum-service:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - quantafolio-network
+
+  # 4. React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: quantafolio-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_BACKEND_URL=http://localhost:8080
+      - VITE_FLASK_URL=http://localhost:5000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Prevent overwriting
+    command: npm run dev -- --host
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - quantafolio-network
+
+networks:
+  quantafolio-network:
+    name: quantafolio-network
+    driver: bridge
+
+volumes:
+  h2-data:
+    driver: local
+

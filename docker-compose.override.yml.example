@@ -1,0 +1,36 @@
+# Docker Compose Override Example
+# 개발 환경에서 사용할 추가 설정
+# 사용법: docker-compose.override.yml로 복사
+
+version: '3.8'
+
+services:
+  quantum-service:
+    # 개발 중 코드 변경 즉시 반영
+    volumes:
+      - ./python-backend:/app
+      - /app/__pycache__
+    # 환경 변수 오버라이드
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+
+  backend:
+    # 개발 중 코드 변경 즉시 반영
+    volumes:
+      - ./backend:/app
+      - /app/target
+    # 환경 변수 오버라이드
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DEVTOOLS_RESTART_ENABLED=true
+
+  frontend:
+    # 개발 중 코드 변경 즉시 반영
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    # 환경 변수 오버라이드
+    environment:
+      - NODE_ENV=development
+

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../contexts/LanguageContext';
+import CurrencyDisplay from './CurrencyDisplay';
 
 /**
  * 실시간 주가 표시 위젯
  * Real-time Stock Price Widget
  */
 const StockPriceWidget = ({ symbol, showDetails = false }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [stockData, setStockData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -91,17 +92,21 @@ const StockPriceWidget = ({ symbol, showDetails = false }) => {
     }
   };
 
-  // Format price with currency
-  const formatPrice = (price, exchange) => {
+  // Format price with currency (with exchange rate conversion)
+  const formatPrice = (price, exchange, currency = null) => {
     if (!price) return '-';
     
-    const isKorean = ['KOSPI', 'KOSDAQ', 'KRX'].includes(exchange);
+    // Determine original currency from exchange or provided currency
+    const originalCurrency = currency || (['KOSPI', 'KOSDAQ', 'KRX'].includes(exchange) ? 'KRW' : 'USD');
     
-    if (isKorean) {
-      return `₩${price.toLocaleString('ko-KR')}`;
-    } else {
-      return `₩${price.toLocaleString('ko-KR')}`;
-    }
+    // Use CurrencyDisplay component for proper conversion
+    return (
+      <CurrencyDisplay 
+        amount={price} 
+        currency={originalCurrency}
+        showConversion={true}
+      />
+    );
   };
 
   // Render loading state
@@ -139,7 +144,7 @@ const StockPriceWidget = ({ symbol, showDetails = false }) => {
 
         {/* Price */}
         <span className="text-lg font-bold text-gray-800 dark:text-white">
-          {formatPrice(stockData.currentPrice, stockData.exchange)}
+          {formatPrice(stockData.currentPrice, stockData.exchange, stockData.currency)}
         </span>
 
         {/* Change */}
@@ -192,9 +197,9 @@ const StockPriceWidget = ({ symbol, showDetails = false }) => {
 
       {/* Price & Change */}
       <div className="flex items-baseline space-x-3">
-        <span className="text-3xl font-bold text-gray-900 dark:text-white">
-          {formatPrice(stockData.currentPrice, stockData.exchange)}
-        </span>
+        <div className="text-3xl font-bold text-gray-900 dark:text-white">
+          {formatPrice(stockData.currentPrice, stockData.exchange, stockData.currency)}
+        </div>
         <span className={`text-xl font-semibold ${stockData.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
           {stockData.change >= 0 ? '▲' : '▼'} {Math.abs(stockData.change).toLocaleString()} ({stockData.changePercent.toFixed(2)}%)
         </span>
@@ -221,11 +226,11 @@ const StockPriceWidget = ({ symbol, showDetails = false }) => {
         </div>
         <div>
           <p className="text-xs text-gray-500">52W High</p>
-          <p className="text-sm font-semibold">{formatPrice(stockData.high52Week, stockData.exchange)}</p>
+          <div className="text-sm font-semibold">{formatPrice(stockData.high52Week, stockData.exchange, stockData.currency)}</div>
         </div>
         <div>
           <p className="text-xs text-gray-500">52W Low</p>
-          <p className="text-sm font-semibold">{formatPrice(stockData.low52Week, stockData.exchange)}</p>
+          <div className="text-sm font-semibold">{formatPrice(stockData.low52Week, stockData.exchange, stockData.currency)}</div>
         </div>
       </div>
 

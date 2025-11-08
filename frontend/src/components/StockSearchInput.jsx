@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { apiClient, API_ENDPOINTS } from '../config/api';
+import CurrencyDisplay from './CurrencyDisplay';
 
 /**
  * 주식 검색 입력 컴포넌트 (한국 + 미국 주식 지원)
@@ -52,9 +53,15 @@ const StockSearchInput = ({ onSelectStock, placeholder = "Search stocks...", cla
     setLoading(true);
 
     try {
-      const response = await axios.get(`/api/portfolio/stock/search?q=${encodeURIComponent(searchQuery)}`);
+      const response = await apiClient.get(API_ENDPOINTS.STOCK_SEARCH, {
+        params: { q: searchQuery }
+      });
       
-      if (response.data.success && response.data.results) {
+      // Backend returns { success: true, data: [...], count: N }
+      if (response.data.success && response.data.data) {
+        setResults(response.data.data);
+      } else if (response.data.success && response.data.results) {
+        // Fallback for old API format
         setResults(response.data.results);
       } else {
         setResults([]);
@@ -174,19 +181,46 @@ const StockSearchInput = ({ onSelectStock, placeholder = "Search stocks...", cla
                         </span>
                         
                         {/* Exchange Badge */}
-                        <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded ${getExchangeBadgeColor(stock.exchange)}`}>
-                          {getExchangeFlag(stock.exchange)} {stock.exchange}
+                        <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded ${getExchangeBadgeColor(stock.market || stock.exchange)}`}>
+                          {getExchangeFlag(stock.market || stock.exchange)} {stock.market || stock.exchange || 'N/A'}
                         </span>
                       </div>
                       
                       {/* Company Name */}
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {highlightMatch(stock.name, query)}
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        {highlightMatch(stock.name || stock.companyName, query)}
                       </div>
+                      
+                      {/* Price with Currency Conversion */}
+                      {stock.currentPrice && (
+                        <div className="mt-1">
+                          <CurrencyDisplay 
+                            amount={stock.currentPrice} 
+                            currency={stock.currency || 'USD'}
+                            showConversion={true}
+                          />
+                          {stock.changePercent && (
+                            <span className={`ml-2 text-xs font-medium ${
+                              stock.changePercent.startsWith('+') || parseFloat(stock.changePercent) > 0
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-600 dark:text-red-400'
+                            }`}>
+                              {stock.changePercent}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Market Info */}
+                      {stock.market && (
+                        <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          Market: {stock.market}
+                        </div>
+                      )}
                     </div>
 
                     {/* Arrow Icon */}
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>

@@ -264,7 +264,7 @@ export const translations = {
   },
   ko: {
     // Navigation
-    dashboard: "대시보드",
+    dashboard: "현황판",
     chatbot: "챗봇",
     optimizer: "최적화",
     settings: "설정",
@@ -449,15 +449,15 @@ export const translations = {
     total: "합계",
     
     // Workflow & Analytics
-    workflow: "워크플로우",
+    workflow: "작업흐름도",
     analytics: "분석",
-    applicationArchitecture: "애플리케이션 아키텍처 및 워크플로우",
+    applicationArchitecture: "애플리케이션 아키텍처 및 작업흐름도",
     workflowDescription: "ToAndFrom 시스템 구성 요소 및 데이터 흐름 실시간 시각화",
     status: "상태",
     ready: "준비",
     running: "실행 중...",
     completed: "완료",
-    simulateWorkflow: "워크플로우 시뮬레이션",
+    simulateWorkflow: "작업흐름도 시뮬레이션",
     systemComponentsLegend: "시스템 구성 요소 범례",
     frontendLayer: "프론트엔드 레이어",
     apiGateway: "API 게이트웨이",
@@ -513,8 +513,8 @@ export const translations = {
     
     // Optimizer Page
     noPortfolioData: "포트폴리오 데이터 없음",
-    pleaseCreatePortfolio: "먼저 대시보드에서 포트폴리오를 생성해주세요",
-    goToDashboard: "대시보드로 이동",
+    pleaseCreatePortfolio: "먼저 현황판에서 포트폴리오를 생성해주세요",
+    goToDashboard: "현황판으로 이동",
     quantumVsClassicalComparison: "양자 & 고전 최적화 비교",
     optimizationSettings: "최적화 설정",
     runClassical: "고전 최적화 실행",

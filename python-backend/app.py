@@ -8,6 +8,7 @@ from flask_cors import CORS
 from optimizer import optimize_portfolio, PortfolioOptimizer
 from chatbot import chat
 from stock_data import get_stock_price
+from stock_price_service import StockPriceService, create_price_endpoints
 from workflow_engine import (
     workflow_engine, 
     create_portfolio_agent,
@@ -24,8 +25,10 @@ import uuid
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Alpha Vantage API Key
-ALPHA_VANTAGE_KEY = 'AKD5ALSCZK8YSJNJ'
+# Alpha Vantage API Key - Load from environment variable for security
+ALPHA_VANTAGE_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
+if not ALPHA_VANTAGE_KEY:
+    logger.warning("ALPHA_VANTAGE_API_KEY not set in environment. Stock search may be limited.")
 
 app = Flask(__name__, static_folder='static')
 CORS(app)  # CORS 활성화 (프론트엔드 연결용)
@@ -61,6 +64,7 @@ def health():
 
 
 @app.route('/api/optimize', methods=['POST'])
+@app.route('/api/portfolio/optimize', methods=['POST'])  # Spring Boot 호환성
 def optimize():
     """
     포트폴리오 최적화 API
@@ -109,7 +113,8 @@ def optimize():
         risk_factor = data.get('risk_factor', 0.5)
         method = data.get('method', 'classical')
         period = data.get('period', '1y')
-        reps = data.get('reps', 5)  # QAOA 회로 깊이 (기본값 5: 더 깊은 양자 회로)
+        reps = data.get('reps', 3)  # QAOA 회로 깊이 (기본값 3)
+        precision = data.get('precision', 4)  # Weight precision in bits per asset
         
         # 유효성 검사
         if not 0.0 <= risk_factor <= 1.0:
@@ -133,7 +138,8 @@ def optimize():
                 risk_factor=risk_factor,
                 method=method,
                 period=period,
-                reps=reps
+                reps=reps,
+                precision=precision
             )
         else:
             result = optimize_portfolio(
@@ -167,6 +173,7 @@ def optimize():
 
 
 @app.route('/api/optimize/with-weights', methods=['POST'])
+@app.route('/api/portfolio/optimize/with-weights', methods=['POST'])  # Spring Boot 호환성
 def optimize_with_weights():
     """
     기존 포트폴리오 비중을 받아서 최적화하는 API
@@ -243,7 +250,8 @@ def optimize_with_weights():
         risk_factor = data.get('risk_factor', 0.5)
         method = data.get('method', 'quantum')
         period = data.get('period', '1y')
-        reps = data.get('reps', 5)  # QAOA 회로 깊이 (기본값 5: 더 깊은 양자 회로)
+        reps = data.get('reps', 3)  # QAOA 회로 깊이 (기본값 3)
+        precision = data.get('precision', 4)  # Weight precision in bits per asset
         
         # 유효성 검사
         if not 0.0 <= risk_factor <= 1.0:
@@ -276,7 +284,7 @@ def optimize_with_weights():
         optimizer.fetch_data(period=period)
         
         if method == 'quantum':
-            result = optimizer.optimize_with_weights(method=method, reps=reps)
+            result = optimizer.optimize_with_weights(method=method, reps=reps, precision=precision)
         else:
             result = optimizer.optimize_with_weights(method=method)
         
@@ -559,9 +567,10 @@ def chatbot_chat():
 
 
 @app.route('/api/stock/price/<symbol>', methods=['GET'])
+@app.route('/api/portfolio/stock/price/<symbol>', methods=['GET'])  # Spring Boot 호환성
 def get_stock_price_endpoint(symbol):
     """
-    실시간 주가 조회 API
+    실시간 주가 조회 API (StockPriceService 사용)
     
     URL Parameter:
         symbol: 주식 심볼 (예: 'AAPL', '005930', '005930.KS')
@@ -569,25 +578,43 @@ def get_stock_price_endpoint(symbol):
     Response:
     {
         "success": true,
-        "symbol": "005930.KS",
-        "name": "Samsung Electronics",
-        "currentPrice": 71000,
-        "change": 500,
-        "changePercent": 0.71,
-        "volume": 12345678,
-        "exchange": "KOSPI",
-        "dataSource": "yfinance"
+        "data": {
+            "symbol": "005930.KS",
+            "name": "Samsung Electronics",
+            "currentPrice": 71000,
+            "currency": "KRW",
+            "market": "KOSPI",
+            "changePercent": "+1.50",
+            "changeAmount": 1050,
+            "previousClose": 69950,
+            "volume": 12345678,
+            "lastUpdated": "2025-01-27T10:30:00"
+        }
     }
     """
     try:
         logger.info(f"실시간 주가 조회 요청: {symbol}")
         
-        result = get_stock_price(symbol)
+        # Use new StockPriceService
+        info = StockPriceService.get_stock_info(symbol)
         
-        if result.get('success'):
-            return jsonify(result)
+        if info:
+            return jsonify({
+                "success": True,
+                "data": info
+            }), 200
         else:
-            return jsonify(result), 404
+            # Fallback to old method if new service fails
+            logger.warning(f"StockPriceService failed for {symbol}, falling back to stock_data")
+            result = get_stock_price(symbol)
+            
+            if result.get('success'):
+                return jsonify(result)
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to fetch price for {symbol}"
+                }), 404
             
     except Exception as e:
         logger.error(f"주가 조회 오류: {str(e)}")
@@ -598,7 +625,65 @@ def get_stock_price_endpoint(symbol):
         }), 500
 
 
+@app.route('/api/stock/prices', methods=['POST'])
+def get_batch_prices_endpoint():
+    """
+    여러 주식의 가격을 한 번에 조회 (배치 API)
+    
+    Request Body:
+    {
+        "symbols": ["AAPL", "005930.KS", "GOOGL"]
+    }
+    
+    Response:
+    {
+        "success": true,
+        "data": {
+            "AAPL": {
+                "symbol": "AAPL",
+                "name": "Apple Inc.",
+                "currentPrice": 178.50,
+                ...
+            },
+            "005930.KS": {
+                "symbol": "005930.KS",
+                "name": "Samsung Electronics",
+                "currentPrice": 71000,
+                ...
+            }
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        symbols = data.get('symbols', [])
+        
+        if not symbols:
+            return jsonify({
+                "success": False,
+                "error": "No symbols provided"
+            }), 400
+        
+        logger.info(f"배치 주가 조회 요청: {len(symbols)}개 심볼")
+        
+        results = StockPriceService.get_batch_prices(symbols)
+        
+        return jsonify({
+            "success": True,
+            "data": results
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"배치 주가 조회 오류: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'배치 주가 조회 오류: {str(e)}'
+        }), 500
+
+
 @app.route('/api/stocks/search', methods=['GET'])
+@app.route('/api/portfolio/stock/search', methods=['GET'])  # Spring Boot 호환성
 def search_stocks_advanced():
     """
     주식 검색 API (한국 + 미국)

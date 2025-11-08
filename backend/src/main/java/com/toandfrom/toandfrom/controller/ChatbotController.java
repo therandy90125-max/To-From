@@ -10,7 +10,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/chatbot")
-@CrossOrigin(origins = "http://localhost:5173")
+// CORS는 WebConfig에서 전역 설정됨
 public class ChatbotController {
     
     private final ChatbotService chatbotService;

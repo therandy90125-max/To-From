@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from "../contexts/LanguageContext";
 import { getCurrencySymbol, getCurrencyCode } from '../utils/currencyUtils';
 import StockSearchInput from './StockSearchInput';
+import CurrencyDisplay from './CurrencyDisplay';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 const COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA'];
@@ -235,12 +236,21 @@ const Dashboard = () => {
                         </td>
                         <td className="px-4 py-4 text-right">
                           <div className="flex flex-col items-end">
-                            <span className="font-medium text-gray-900">
-                              {currencySymbol}{value.toLocaleString()}
-                            </span>
-                            <span className={`text-xs ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {pl >= 0 ? '+' : ''}{currencySymbol}{pl.toLocaleString()} ({plPercent.toFixed(1)}%)
-                            </span>
+                            <div className="font-medium text-gray-900">
+                              <CurrencyDisplay 
+                                amount={value} 
+                                currency={stock.exchange === 'KRX' || stock.exchange === 'KOSPI' || stock.exchange === 'KOSDAQ' ? 'KRW' : 'USD'}
+                                showConversion={true}
+                              />
+                            </div>
+                            <div className={`text-xs ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              <CurrencyDisplay 
+                                amount={Math.abs(pl)} 
+                                currency={stock.exchange === 'KRX' || stock.exchange === 'KOSPI' || stock.exchange === 'KOSDAQ' ? 'KRW' : 'USD'}
+                                showConversion={false}
+                              />
+                              <span className="ml-1">({pl >= 0 ? '+' : ''}{plPercent.toFixed(1)}%)</span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-4 text-center">

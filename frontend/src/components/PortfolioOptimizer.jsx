@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLanguage } from '../contexts/LanguageContext';
 import { getCurrencySymbol, getCurrencyCode } from '../utils/currencyUtils';
-import axios from 'axios';
+import { apiClient, API_ENDPOINTS, checkBackendHealth } from '../config/api';
+import LanguageSwitcher from './LanguageSwitcher';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 const COLORS = {
@@ -28,6 +29,7 @@ export default function PortfolioOptimizer() {
   const [loading, setLoading] = useState({ classical: false, quantum: false });
   const [error, setError] = useState(null);
   const [showComparison, setShowComparison] = useState(false);
+  const [backendConnected, setBackendConnected] = useState(false);
 
   // Load portfolio from Dashboard
   useEffect(() => {
@@ -42,6 +44,37 @@ export default function PortfolioOptimizer() {
       }
     }
   }, []);
+
+  // 백엔드 연결 확인 (컴포넌트 마운트시)
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const isHealthy = await checkBackendHealth();
+        setBackendConnected(isHealthy);
+        
+        if (!isHealthy) {
+          setError(
+            language === 'ko' 
+              ? '⚠️ 백엔드 서버에 연결할 수 없습니다. start-all.bat을 실행했는지 확인하세요.'
+              : '⚠️ Cannot connect to backend server. Please check if start-all.bat is running.'
+          );
+        } else {
+          // 연결 성공 시 에러 메시지 제거
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Backend connection check error:', err);
+        setBackendConnected(false);
+      }
+    };
+    
+    // 초기 확인
+    checkConnection();
+    
+    // 주기적으로 연결 상태 확인 (30초마다)
+    const interval = setInterval(checkConnection, 30000);
+    return () => clearInterval(interval);
+  }, [language]);
 
   // Run optimization
   const runOptimization = async (method) => {
@@ -59,7 +92,7 @@ export default function PortfolioOptimizer() {
       const totalShares = originalPortfolio.reduce((sum, s) => sum + s.shares, 0);
       const initialWeights = originalPortfolio.map(s => s.shares / totalShares);
 
-      const response = await axios.post('/api/portfolio/optimize/with-weights', {
+      const response = await apiClient.post(API_ENDPOINTS.OPTIMIZE_WITH_WEIGHTS, {
         tickers,
         initial_weights: initialWeights,
         risk_factor: riskFactor,
@@ -190,12 +223,29 @@ export default function PortfolioOptimizer() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            🎯 {t('portfolioOptimization')}
-          </h1>
-          <p className="text-gray-600">
-            {t('quantumVsClassicalComparison')}
-          </p>
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                🎯 {t('portfolioOptimization')}
+              </h1>
+              <p className="text-gray-600">
+                {t('quantumVsClassicalComparison')}
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              {/* 백엔드 상태 표시 */}
+              <div className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                backendConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {backendConnected 
+                  ? (language === 'ko' ? '✅ 백엔드 연결됨' : '✅ Backend Connected')
+                  : (language === 'ko' ? '❌ 백엔드 연결 안됨' : '❌ Backend Disconnected')
+                }
+              </div>
+              {/* Language Switcher */}
+              <LanguageSwitcher />
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

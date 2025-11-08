@@ -4,7 +4,8 @@
   "description": "Quantum Portfolio Optimization Platform",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n \"Flask,Spring,React\" -c \"yellow,green,cyan\" \"npm run dev:flask\" \"npm run dev:spring\" \"npm run dev:react\"",
+    "dev": "npm run dev:react",
+    "dev:all": "concurrently -n \"Flask,Spring,React\" -c \"yellow,green,cyan\" \"npm run dev:flask\" \"npm run dev:spring\" \"npm run dev:react\"",
     "dev:flask": "cd python-backend && python app.py",
     "dev:spring": "cd backend && mvnw.cmd spring-boot:run",
     "dev:react": "cd frontend && npm run dev",
