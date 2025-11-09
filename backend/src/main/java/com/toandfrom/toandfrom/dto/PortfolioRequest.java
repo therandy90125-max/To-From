@@ -1,5 +1,6 @@
 package com.toandfrom.toandfrom.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
@@ -43,7 +44,10 @@ public class PortfolioRequest {
     /**
      * Initial weights (optional, for optimizeWithWeights endpoint)
      * 초기 비중 (선택사항, optimizeWithWeights 엔드포인트용)
+     * 
+     * @JsonProperty: 프론트엔드에서 "initial_weights" (snake_case)로 보내도 자동 매핑
      */
+    @JsonProperty("initial_weights")
     private List<Double> initialWeights;
     
     // Constructors

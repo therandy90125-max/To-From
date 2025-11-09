@@ -1,0 +1,1312 @@
+# -*- coding: utf-8 -*-
+"""
+QuantaFolio Navigator - Flask Quantum Service
+Complete Windows cp949 compatibility solution
+"""
+
+import sys
+import io
+import os
+import warnings
+
+# ================================
+# CRITICAL: Windows cp949 완전 해결
+# ================================
+
+# 환경변수 강제 설정
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ['PYTHONUTF8'] = '1'
+
+# 표준 출력/에러를 UTF-8로 강제 (에러 무시 모드)
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(
+        sys.stdout.buffer, 
+        encoding='utf-8', 
+        errors='replace',  # 인코딩 불가능한 문자는 '?'로 대체
+        line_buffering=True
+    )
+    sys.stderr = io.TextIOWrapper(
+        sys.stderr.buffer, 
+        encoding='utf-8', 
+        errors='replace',
+        line_buffering=True
+    )
+
+# 모든 경고 억제 (일부 라이브러리의 이모지 경고 차단)
+warnings.filterwarnings('ignore')
+
+# 로깅도 UTF-8로 강제
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+print("[INFO] UTF-8 encoding forcefully enabled (errors='replace')")
+print("[INFO] All non-UTF-8 characters will be replaced with '?'")
+
+# ================================
+# 이제 나머지 import
+# ================================
+
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from optimizer import optimize_portfolio, PortfolioOptimizer
+from chatbot import chat
+from stock_data import get_stock_price
+from stock_price_service import StockPriceService, create_price_endpoints
+from workflow_engine import (
+    workflow_engine, 
+    create_portfolio_agent,
+    WorkflowState
+)
+import traceback
+import yfinance as yf
+import requests
+import uuid
+
+# ================================
+# Windows cp949 [EMOJI] [EMOJI] ([EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI])
+# ================================
+
+def remove_emojis(text):
+    """
+    [EMOJI] [EMOJI] [EMOJI] (Windows cp949 [EMOJI])
+    """
+    import re
+    # [EMOJI] [EMOJI] [EMOJI]
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # [EMOJI] [EMOJI]
+        "\U0001F300-\U0001F5FF"  # [EMOJI] & [EMOJI]
+        "\U0001F680-\U0001F6FF"  # [EMOJI] & [EMOJI]
+        "\U0001F1E0-\U0001F1FF"  # [EMOJI]
+        "\U00002702-\U000027B0"
+        "\U000024C2-\U0001F251"
+        "]+",
+        flags=re.UNICODE
+    )
+    return emoji_pattern.sub(r'', text)
+
+def safe_encode_error(error_msg):
+    """[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]"""
+    return remove_emojis(str(error_msg))
+
+# 로깅은 이미 위에서 설정됨 (중복 제거)
+
+# [EMOJI] [EMOJI] [EMOJI] ([EMOJI] [EMOJI])
+class SafeLoggingHandler(logging.StreamHandler):
+    def emit(self, record):
+        try:
+            # [EMOJI] [EMOJI] [EMOJI]
+            if hasattr(record, 'msg') and isinstance(record.msg, str):
+                record.msg = remove_emojis(record.msg)
+            if hasattr(record, 'args') and record.args:
+                # args [EMOJI] [EMOJI]
+                safe_args = tuple(remove_emojis(str(arg)) if isinstance(arg, str) else arg for arg in record.args)
+                record.args = safe_args
+            super().emit(record)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            # [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+            try:
+                record.msg = str(record.msg).encode('ascii', 'ignore').decode('ascii')
+                super().emit(record)
+            except:
+                pass  # [EMOJI] [EMOJI]: [EMOJI] [EMOJI] [EMOJI]
+
+logger = logging.getLogger(__name__)
+# [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+for handler in logger.handlers[:]:
+    logger.removeHandler(handler)
+logger.addHandler(SafeLoggingHandler())
+logger.setLevel(logging.INFO)
+
+# Alpha Vantage API Key - Load from environment variable for security
+ALPHA_VANTAGE_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
+if not ALPHA_VANTAGE_KEY:
+    logger.warning("ALPHA_VANTAGE_API_KEY not set in environment. Stock search may be limited.")
+
+app = Flask(__name__, static_folder='static')
+CORS(app)  # CORS 활성화 (프론트엔드 연결용)
+
+# ================================
+# 모든 JSON 응답에서 이모지 자동 제거 (after_request 훅)
+# ================================
+@app.after_request
+def clean_response(response):
+    """모든 JSON 응답에서 이모지 자동 제거"""
+    if response.content_type and 'application/json' in response.content_type:
+        try:
+            import json
+            data = json.loads(response.get_data(as_text=True))
+            # 이모지 제거
+            def clean_dict(obj):
+                if isinstance(obj, dict):
+                    return {k: clean_dict(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [clean_dict(item) for item in obj]
+                elif isinstance(obj, str):
+                    return remove_emojis(obj)
+                else:
+                    return obj
+            
+            cleaned_data = clean_dict(data)
+            response.set_data(json.dumps(cleaned_data, ensure_ascii=True))
+        except:
+            # JSON 파싱 실패 시 원본 응답 반환
+            pass
+    return response
+
+# ================================
+# Windows cp949 [EMOJI] [EMOJI]
+# ================================
+
+def remove_emojis(text):
+    """
+    [EMOJI] [EMOJI] [EMOJI] (Windows cp949 [EMOJI])
+    """
+    import re
+    # [EMOJI] [EMOJI] [EMOJI]
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # [EMOJI] [EMOJI]
+        "\U0001F300-\U0001F5FF"  # [EMOJI] & [EMOJI]
+        "\U0001F680-\U0001F6FF"  # [EMOJI] & [EMOJI]
+        "\U0001F1E0-\U0001F1FF"  # [EMOJI]
+        "\U00002702-\U000027B0"
+        "\U000024C2-\U0001F251"
+        "]+",
+        flags=re.UNICODE
+    )
+    return emoji_pattern.sub(r'', text)
+
+def safe_encode_error(error_msg):
+    """[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]"""
+    return remove_emojis(str(error_msg))
+
+def safe_json_response(data, status_code=200):
+    """
+    Windows cp949 [EMOJI] [EMOJI] JSON [EMOJI]
+    
+    Args:
+        data (dict): [EMOJI] [EMOJI]
+        status_code (int): HTTP [EMOJI] [EMOJI]
+        
+    Returns:
+        Response: Flask [EMOJI] [EMOJI]
+    """
+    import json
+    # [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+    def clean_dict(obj):
+        if isinstance(obj, dict):
+            return {k: clean_dict(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [clean_dict(item) for item in obj]
+        elif isinstance(obj, str):
+            return remove_emojis(obj)
+        else:
+            return obj
+    
+    cleaned_data = clean_dict(data)
+    
+    # ensure_ascii=True[EMOJI] [EMOJI] JSON [EMOJI]
+    response = app.response_class(
+        response=json.dumps(cleaned_data, ensure_ascii=True),
+        status=status_code,
+        mimetype='application/json'
+    )
+    return response
+
+
+@app.route('/')
+def home():
+    """[EMOJI] [EMOJI]"""
+    return jsonify({
+        'message': 'ToAndFrom Portfolio Optimization API',
+        'version': '1.0.0',
+        'endpoints': {
+            '/api/optimize': 'POST - [EMOJI] [EMOJI]',
+            '/api/health': 'GET - [EMOJI] [EMOJI] [EMOJI]',
+            '/test': 'GET - [EMOJI] [EMOJI]'
+        }
+    })
+
+
+@app.route('/test')
+def test_page():
+    """[EMOJI] [EMOJI]"""
+    return send_from_directory(app.static_folder, 'test.html')
+
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    """[EMOJI] [EMOJI] [EMOJI]"""
+    return jsonify({
+        'status': 'healthy',
+        'service': 'ToAndFrom Portfolio Optimizer'
+    })
+
+
+@app.route('/api/optimize', methods=['POST'])
+@app.route('/api/portfolio/optimize', methods=['POST'])  # Spring Boot [EMOJI]
+def optimize():
+    """
+    [EMOJI] [EMOJI] API
+    
+    Request Body (JSON):
+    {
+        "tickers": ["AAPL", "GOOGL", "MSFT"],
+        "risk_factor": 0.5,  # 0.0 ~ 1.0 ([EMOJI], [EMOJI]: 0.5)
+        "method": "classical",  # "classical" [EMOJI] "quantum" ([EMOJI], [EMOJI]: "classical")
+        "period": "1y",  # "1y", "6mo", "3mo" [EMOJI] ([EMOJI], [EMOJI]: "1y")
+        "reps": 1  # [EMOJI] [EMOJI] [EMOJI] reps ([EMOJI], [EMOJI]: 1)
+    }
+    
+    Response:
+    {
+        "success": true,
+        "result": {
+            "selected_tickers": ["AAPL", "GOOGL"],
+            "weights": [0.5, 0.5],
+            "expected_return": 0.15,
+            "risk": 0.20,
+            "sharpe_ratio": 0.75,
+            "method": "classical"
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        # [EMOJI] [EMOJI] [EMOJI]
+        if not data or 'tickers' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'tickers [EMOJI] [EMOJI].'
+            }), 400
+        
+        tickers = data['tickers']
+        
+        if not isinstance(tickers, list) or len(tickers) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'tickers[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI].'
+            }), 400
+        
+        # [EMOJI] [EMOJI]
+        risk_factor = data.get('risk_factor', 0.5)
+        method = data.get('method', 'classical')
+        period = data.get('period', '1y')
+        # QAOA [EMOJI] [EMOJI] (reps)
+        # [EMOJI] [EMOJI]:
+        # - reps=3: ~300[EMOJI], [EMOJI] [EMOJI] 85%
+        # - reps=2: ~150[EMOJI], [EMOJI] [EMOJI] 75-80% ([EMOJI] [EMOJI])
+        # - reps=1: ~60[EMOJI], [EMOJI] [EMOJI] 65-75% ([EMOJI]/[EMOJI])
+        # [EMOJI] [EMOJI]: QAOA[EMOJI] [EMOJI] layer[EMOJI] 2^n [EMOJI] [EMOJI] [EMOJI]
+        # reps=3 → reps=1[EMOJI] [EMOJI] [EMOJI] [EMOJI] 1/3[EMOJI] [EMOJI]
+        # Portfolio optimization[EMOJI] 1-layer[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+        reps = data.get('reps', 1)  # [EMOJI]: 1 ([EMOJI]/[EMOJI]), [EMOJI]: 2 [EMOJI]
+        precision = data.get('precision', 4)  # Weight precision in bits per asset
+        
+        # [EMOJI] [EMOJI]
+        if not 0.0 <= risk_factor <= 1.0:
+            return jsonify({
+                'success': False,
+                'error': 'risk_factor[EMOJI] 0.0[EMOJI] 1.0 [EMOJI] [EMOJI].'
+            }), 400
+        
+        if method not in ['classical', 'quantum']:
+            return jsonify({
+                'success': False,
+                'error': 'method[EMOJI] "classical" [EMOJI] "quantum"[EMOJI] [EMOJI].'
+            }), 400
+        
+        logger.info(f"[EMOJI] [EMOJI] [EMOJI]: tickers={tickers}, method={method}, risk={risk_factor}")
+        
+        # [EMOJI] [EMOJI]
+        if method == 'quantum':
+            result = optimize_portfolio(
+                tickers=tickers,
+                risk_factor=risk_factor,
+                method=method,
+                period=period,
+                reps=reps,
+                precision=precision
+            )
+        else:
+            result = optimize_portfolio(
+                tickers=tickers,
+                risk_factor=risk_factor,
+                method=method,
+                period=period
+            )
+        
+        logger.info(f"[EMOJI] [EMOJI]: {result['selected_tickers']}")
+        
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+        
+    except ValueError as e:
+        logger.error(f"[EMOJI] [EMOJI]: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+        
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        # Traceback[EMOJI] [EMOJI] [EMOJI]
+        try:
+            tb_str = traceback.format_exc()
+            safe_tb = safe_encode_error(tb_str)
+            logger.error(f"[EMOJI] [EMOJI]: {error_msg}\n{safe_tb}")
+        except:
+            logger.error(f"[EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': f'[EMOJI] [EMOJI] [EMOJI]: {error_msg}'
+        }), 500
+
+
+@app.route('/api/optimize/with-weights', methods=['POST'])
+@app.route('/api/portfolio/optimize/with-weights', methods=['POST'])  # Spring Boot [EMOJI]
+def optimize_with_weights():
+    """
+    [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] API
+    
+    Request Body (JSON):
+    {
+        "tickers": ["AAPL", "GOOGL", "MSFT"],
+        "initial_weights": [0.4, 0.4, 0.2],  # [EMOJI] [EMOJI] ([EMOJI] 1.0[EMOJI] [EMOJI])
+        "risk_factor": 0.5,  # 0.0 ~ 1.0 ([EMOJI], [EMOJI]: 0.5)
+        "method": "quantum",  # "classical" [EMOJI] "quantum" ([EMOJI], [EMOJI]: "quantum")
+        "period": "1y",  # "1y", "6mo", "3mo" [EMOJI] ([EMOJI], [EMOJI]: "1y")
+        "reps": 1  # [EMOJI] [EMOJI] [EMOJI] reps ([EMOJI], [EMOJI]: 1)
+    }
+    
+    Response:
+    {
+        "success": true,
+        "result": {
+            "original": {
+                "tickers": ["AAPL", "GOOGL", "MSFT"],
+                "weights": [0.4, 0.4, 0.2],
+                "expected_return": 0.15,
+                "risk": 0.20,
+                "sharpe_ratio": 0.75
+            },
+            "optimized": {
+                "tickers": ["AAPL", "GOOGL", "MSFT"],
+                "weights": [0.5, 0.3, 0.2],
+                "expected_return": 0.16,
+                "risk": 0.21,
+                "sharpe_ratio": 0.76
+            },
+            "improvements": {
+                "return_improvement": 6.67,
+                "risk_change": 5.00,
+                "sharpe_improvement": 1.33
+            },
+            "method": "quantum"
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        # [EMOJI]: [EMOJI] JSON payload [EMOJI] ([EMOJI] [EMOJI])
+        try:
+            debug_msg = f"[DEBUG] Received: {data}"
+            safe_debug = remove_emojis(debug_msg)
+            print(safe_debug)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            # Windows [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+            print(f"[DEBUG] Received data (length: {len(str(data))})")
+        if data and 'tickers' in data and 'initial_weights' in data:
+            try:
+                tickers_info = f"   -> tickers: {data['tickers']} (count: {len(data['tickers'])})"
+                weights_info = f"   -> initial_weights: (count: {len(data['initial_weights']) if isinstance(data['initial_weights'], list) else 'N/A'})"
+                print(remove_emojis(tickers_info))
+                print(remove_emojis(weights_info))
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                print(f"   -> tickers count: {len(data['tickers'])}")
+                print(f"   -> weights count: {len(data['initial_weights']) if isinstance(data['initial_weights'], list) else 'N/A'}")
+        
+        # [EMOJI] [EMOJI] [EMOJI]
+        if not data or 'tickers' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'tickers [EMOJI] [EMOJI].'
+            }), 400
+        
+        if 'initial_weights' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'initial_weights [EMOJI] [EMOJI].'
+            }), 400
+        
+        tickers = data['tickers']
+        initial_weights = data['initial_weights']
+        
+        if not isinstance(tickers, list) or len(tickers) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'tickers[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI].'
+            }), 400
+        
+        # initial_weights[EMOJI] tickers[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+        if not isinstance(initial_weights, list) or len(initial_weights) != len(tickers):
+            return jsonify({
+                'success': False,
+                'error': f'initial_weights[EMOJI] [EMOJI] tickers[EMOJI] [EMOJI] [EMOJI]. (tickers: {len(tickers)}[EMOJI], weights: {len(initial_weights) if isinstance(initial_weights, list) else 0}[EMOJI])'
+            }), 400
+        
+        # [EMOJI] [EMOJI]
+        risk_factor = data.get('risk_factor', 0.5)
+        method = data.get('method', 'quantum')
+        period = data.get('period', '1y')
+        # QAOA [EMOJI] [EMOJI] (reps)
+        # [EMOJI] [EMOJI]:
+        # - reps=3: ~300[EMOJI], [EMOJI] [EMOJI] 85%
+        # - reps=2: ~150[EMOJI], [EMOJI] [EMOJI] 75-80% ([EMOJI] [EMOJI])
+        # - reps=1: ~60[EMOJI], [EMOJI] [EMOJI] 65-75% ([EMOJI]/[EMOJI])
+        # [EMOJI] [EMOJI]: QAOA[EMOJI] [EMOJI] layer[EMOJI] 2^n [EMOJI] [EMOJI] [EMOJI]
+        # reps=3 → reps=1[EMOJI] [EMOJI] [EMOJI] [EMOJI] 1/3[EMOJI] [EMOJI]
+        # Portfolio optimization[EMOJI] 1-layer[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+        reps = data.get('reps', 1)  # [EMOJI]: 1 ([EMOJI]/[EMOJI]), [EMOJI]: 2 [EMOJI]
+        precision = data.get('precision', 4)  # Weight precision in bits per asset
+        
+        # [EMOJI] [EMOJI]
+        if not 0.0 <= risk_factor <= 1.0:
+            return jsonify({
+                'success': False,
+                'error': 'risk_factor[EMOJI] 0.0[EMOJI] 1.0 [EMOJI] [EMOJI].'
+            }), 400
+        
+        if method not in ['classical', 'quantum']:
+            return jsonify({
+                'success': False,
+                'error': 'method[EMOJI] "classical" [EMOJI] "quantum"[EMOJI] [EMOJI].'
+            }), 400
+        
+        weight_sum = sum(initial_weights)
+        if abs(weight_sum - 1.0) > 0.01:
+            return jsonify({
+                'success': False,
+                'error': f'initial_weights[EMOJI] [EMOJI] 1.0[EMOJI] [EMOJI]. [EMOJI]: {weight_sum:.4f}'
+            }), 400
+        
+        logger.info(f"[EMOJI] [EMOJI] [EMOJI] [EMOJI]: tickers={tickers}, method={method}, risk={risk_factor}")
+        
+        # [EMOJI] [EMOJI]
+        # Fast mode [EMOJI] (reps=1, maxiter=50) - [EMOJI] [EMOJI]
+        fast_mode = data.get('fast_mode', True)  # [EMOJI]: True ([EMOJI] [EMOJI])
+        
+        optimizer = PortfolioOptimizer(
+            tickers=tickers,
+            risk_factor=risk_factor,
+            initial_weights=initial_weights,
+            fast_mode=fast_mode
+        )
+        optimizer.fetch_data(period=period)
+        
+        if method == 'quantum':
+            result = optimizer.optimize_with_weights(method=method, reps=reps, precision=precision)
+        else:
+            result = optimizer.optimize_with_weights(method=method)
+        
+        logger.info(f"[EMOJI] [EMOJI] [EMOJI]: [EMOJI] {result['improvements']['return_improvement']:.2f}%")
+        
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+        
+    except ValueError as e:
+        error_msg = safe_encode_error(str(e))
+        logger.error(f"[EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 400
+        
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        # Traceback[EMOJI] [EMOJI] [EMOJI]
+        try:
+            tb_str = traceback.format_exc()
+            safe_tb = safe_encode_error(tb_str)
+            logger.error(f"[EMOJI] [EMOJI]: {error_msg}\n{safe_tb}")
+        except:
+            logger.error(f"[EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': f'[EMOJI] [EMOJI] [EMOJI]: {error_msg}'
+        }), 500
+
+
+@app.route('/api/optimize/batch', methods=['POST'])
+def optimize_batch():
+    """
+    [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+    
+    Request Body (JSON):
+    {
+        "portfolios": [
+            {
+                "tickers": ["AAPL", "GOOGL"],
+                "risk_factor": 0.5,
+                "method": "classical"
+            },
+            {
+                "tickers": ["MSFT", "AMZN"],
+                "risk_factor": 0.7,
+                "method": "quantum"
+            }
+        ]
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'portfolios' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'portfolios [EMOJI] [EMOJI].'
+            }), 400
+        
+        portfolios = data['portfolios']
+        results = []
+        
+        for i, portfolio in enumerate(portfolios):
+            try:
+                tickers = portfolio.get('tickers', [])
+                risk_factor = portfolio.get('risk_factor', 0.5)
+                method = portfolio.get('method', 'classical')
+                period = portfolio.get('period', '1y')
+                reps = portfolio.get('reps', 1)
+                
+                if method == 'quantum':
+                    result = optimize_portfolio(
+                        tickers=tickers,
+                        risk_factor=risk_factor,
+                        method=method,
+                        period=period,
+                        reps=reps
+                    )
+                else:
+                    result = optimize_portfolio(
+                        tickers=tickers,
+                        risk_factor=risk_factor,
+                        method=method,
+                        period=period
+                    )
+                
+                results.append({
+                    'success': True,
+                    'portfolio_index': i,
+                    'result': result
+                })
+                
+            except Exception as e:
+                results.append({
+                    'success': False,
+                    'portfolio_index': i,
+                    'error': str(e)
+                })
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        logger.error(f"[EMOJI] [EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': f'[EMOJI] [EMOJI] [EMOJI]: {error_msg}'
+        }), 500
+
+
+@app.route('/api/optimize/workflow', methods=['POST'])
+def optimize_with_workflow():
+    """
+    AI Agent [EMOJI] [EMOJI] [EMOJI] ([EMOJI] [EMOJI])
+    
+    Flow:
+    1. Form Submission → 2. AI Agent → 3. Optimization → 
+    4. Risk Analysis → 5. Conditional Branching → 6. Action
+    
+    Request Body (JSON):
+    {
+        "tickers": ["AAPL", "GOOGL", "MSFT"],
+        "initial_weights": [0.4, 0.3, 0.3],  # optional
+        "risk_factor": 0.5,
+        "method": "quantum",
+        "period": "1y"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "workflow_id": "wf_123abc",
+        "optimization_result": {...},
+        "risk_analysis": {
+            "risk_level": "low|medium|high",
+            "volatility_percentage": 15.2,
+            "recommendation": "...",
+            "sharpe_ratio": 0.85
+        },
+        "action_taken": "alert_manager|notify_user|auto_approve",
+        "action_result": {...},
+        "workflow_steps": [...]
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'tickers' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'tickers [EMOJI] [EMOJI].'
+            }), 400
+        
+        # Generate workflow ID
+        workflow_id = f"wf_{uuid.uuid4().hex[:8]}"
+        
+        # Create AI Agent
+        agent = create_portfolio_agent()
+        
+        # Create workflow
+        workflow_engine.create_workflow(workflow_id, agent)
+        
+        logger.info(f"Created workflow: {workflow_id}")
+        
+        # Prepare optimization function
+        def run_optimization(tickers, initial_weights, risk_factor, method, period, fast_mode=True):
+            """
+            Optimization wrapper for workflow
+            
+            Args:
+                tickers (list): [EMOJI] [EMOJI]
+                initial_weights (list): [EMOJI] [EMOJI]
+                risk_factor (float): [EMOJI] [EMOJI]
+                method (str): [EMOJI] [EMOJI]
+                period (str): [EMOJI] [EMOJI]
+                fast_mode (bool): [EMOJI] [EMOJI] [EMOJI] ([EMOJI]: True)
+            """
+            # [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+            
+            if initial_weights:
+                # With weights
+                optimizer = PortfolioOptimizer(
+                    tickers=tickers,
+                    risk_factor=risk_factor,
+                    initial_weights=initial_weights,
+                    fast_mode=fast_mode
+                )
+                optimizer.fetch_data(period=period)
+                return optimizer.optimize_with_weights(method=method)
+            else:
+                # Without weights
+                optimizer = PortfolioOptimizer(
+                    tickers=tickers,
+                    risk_factor=risk_factor,
+                    fast_mode=fast_mode
+                )
+                optimizer.fetch_data(period=period)
+                return optimizer.optimize(method=method)
+        
+        # Execute workflow
+        result = workflow_engine.execute_workflow(
+            workflow_id=workflow_id,
+            input_data=data,
+            optimization_func=run_optimization
+        )
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        # Traceback[EMOJI] [EMOJI] [EMOJI]
+        try:
+            tb_str = traceback.format_exc()
+            safe_tb = safe_encode_error(tb_str)
+            logger.error(f"[EMOJI] [EMOJI]: {error_msg}\n{safe_tb}")
+        except:
+            logger.error(f"[EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': f'[EMOJI] [EMOJI]: {error_msg}'
+        }), 500
+
+
+@app.route('/api/workflow/<workflow_id>/status', methods=['GET'])
+def get_workflow_status(workflow_id):
+    """
+    [EMOJI] [EMOJI] [EMOJI]
+    
+    Response:
+    {
+        "id": "wf_123abc",
+        "status": "completed|processing|failed",
+        "created_at": "2025-11-07T...",
+        "steps": [...]
+    }
+    """
+    try:
+        status = workflow_engine.get_workflow_status(workflow_id)
+        
+        if 'error' in status:
+            return jsonify(status), 404
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        logger.error(f"[EMOJI] [EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'error': f'[EMOJI] [EMOJI] [EMOJI]: {error_msg}'
+        }), 500
+
+
+@app.route('/api/chatbot/chat', methods=['POST'])
+def chatbot_chat():
+    """
+    [EMOJI] [EMOJI] API
+    
+    Request Body (JSON):
+    {
+        "message": "[EMOJI] [EMOJI] [EMOJI]?",
+        "history": [],  # [EMOJI]
+        "language": "ko"  # [EMOJI], [EMOJI]: "ko"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "response": "[EMOJI] [EMOJI]...",
+        "language": "ko"
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'message' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'message [EMOJI] [EMOJI].'
+            }), 400
+        
+        message = data['message']
+        history = data.get('history', [])
+        language = data.get('language', 'ko')
+        
+        result = chat(message, history, language)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        # Traceback[EMOJI] [EMOJI] [EMOJI]
+        try:
+            tb_str = traceback.format_exc()
+            safe_tb = safe_encode_error(tb_str)
+            logger.error(f"[EMOJI] [EMOJI]: {error_msg}\n{safe_tb}")
+        except:
+            logger.error(f"[EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': f'[EMOJI] [EMOJI]: {error_msg}'
+        }), 500
+
+
+@app.route('/api/stock/price/<symbol>', methods=['GET'])
+@app.route('/api/portfolio/stock/price/<symbol>', methods=['GET'])  # Spring Boot [EMOJI]
+def get_stock_price_endpoint(symbol):
+    """
+    [EMOJI] [EMOJI] [EMOJI] API (StockPriceService [EMOJI])
+    
+    URL Parameter:
+        symbol: [EMOJI] [EMOJI] ([EMOJI]: 'AAPL', '005930', '005930.KS')
+    
+    Response:
+    {
+        "success": true,
+        "data": {
+            "symbol": "005930.KS",
+            "name": "Samsung Electronics",
+            "currentPrice": 71000,
+            "currency": "KRW",
+            "market": "KOSPI",
+            "changePercent": "+1.50",
+            "changeAmount": 1050,
+            "previousClose": 69950,
+            "volume": 12345678,
+            "lastUpdated": "2025-01-27T10:30:00"
+        }
+    }
+    """
+    try:
+        logger.info(f"[EMOJI] [EMOJI] [EMOJI] [EMOJI]: {symbol}")
+        
+        # Use new StockPriceService
+        info = StockPriceService.get_stock_info(symbol)
+        
+        if info:
+            return jsonify({
+                "success": True,
+                "data": info
+            }), 200
+        else:
+            # Fallback to old method if new service fails
+            logger.warning(f"StockPriceService failed for {symbol}, falling back to stock_data")
+            result = get_stock_price(symbol)
+            
+            if result.get('success'):
+                return jsonify(result)
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to fetch price for {symbol}"
+                }), 404
+            
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        # Traceback[EMOJI] [EMOJI] [EMOJI]
+        try:
+            tb_str = traceback.format_exc()
+            safe_tb = safe_encode_error(tb_str)
+            logger.error(f"[EMOJI] [EMOJI] [EMOJI]: {error_msg}\n{safe_tb}")
+        except:
+            logger.error(f"[EMOJI] [EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': f'[EMOJI] [EMOJI] [EMOJI]: {error_msg}'
+        }), 500
+
+
+@app.route('/api/stock/prices', methods=['POST'])
+def get_batch_prices_endpoint():
+    """
+    [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] ([EMOJI] API)
+    
+    Request Body:
+    {
+        "symbols": ["AAPL", "005930.KS", "GOOGL"]
+    }
+    
+    Response:
+    {
+        "success": true,
+        "data": {
+            "AAPL": {
+                "symbol": "AAPL",
+                "name": "Apple Inc.",
+                "currentPrice": 178.50,
+                ...
+            },
+            "005930.KS": {
+                "symbol": "005930.KS",
+                "name": "Samsung Electronics",
+                "currentPrice": 71000,
+                ...
+            }
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        symbols = data.get('symbols', [])
+        
+        if not symbols:
+            return jsonify({
+                "success": False,
+                "error": "No symbols provided"
+            }), 400
+        
+        logger.info(f"[EMOJI] [EMOJI] [EMOJI] [EMOJI]: {len(symbols)}[EMOJI] [EMOJI]")
+        
+        results = StockPriceService.get_batch_prices(symbols)
+        
+        return jsonify({
+            "success": True,
+            "data": results
+        }), 200
+        
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        # Traceback[EMOJI] [EMOJI] [EMOJI]
+        try:
+            tb_str = traceback.format_exc()
+            safe_tb = safe_encode_error(tb_str)
+            logger.error(f"[EMOJI] [EMOJI] [EMOJI] [EMOJI]: {error_msg}\n{safe_tb}")
+        except:
+            logger.error(f"[EMOJI] [EMOJI] [EMOJI] [EMOJI]: {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': f'[EMOJI] [EMOJI] [EMOJI] [EMOJI]: {error_msg}'
+        }), 500
+
+
+@app.route('/api/stocks/search', methods=['GET'])
+@app.route('/api/portfolio/stock/search', methods=['GET'])  # Spring Boot [EMOJI]
+def search_stocks_advanced():
+    """
+    [EMOJI] [EMOJI] API ([EMOJI] + [EMOJI])
+    
+    Query Parameters:
+        q: [EMOJI] ([EMOJI] [EMOJI] [EMOJI])
+    
+    Response:
+        [
+            {
+                "ticker": "005930.KS",
+                "name": "Samsung Electronics",
+                "exchange": "KRX"
+            },
+            ...
+        ]
+    """
+    try:
+        query = request.args.get('q', '').upper()
+        
+        if not query or len(query) < 1:
+            return jsonify([])
+        
+        results = []
+        
+        # [EMOJI] [EMOJI] [EMOJI] ([EMOJI] [EMOJI])
+        korean_stocks = {
+            # [EMOJI]
+            '005930': 'Samsung Electronics',
+            '000660': 'SK Hynix',
+            '035420': 'NAVER',
+            '035720': 'Kakao',
+            '051910': 'LG Chem',
+            '006400': 'Samsung SDI',
+            '005380': 'Hyundai Motor',
+            '012330': 'Hyundai Mobis',
+            '028260': 'Samsung C&T',
+            
+            # [EMOJI]/[EMOJI]
+            '068270': 'Celltrion',
+            '207940': 'Samsung Biologics',
+            '326030': 'SK Biopharmaceuticals',
+            '128940': 'Han Mi Pharm',
+            '214450': 'Celltrion Healthcare',
+            
+            # IT/[EMOJI]
+            '251270': 'Netmarble',
+            '036570': 'NCsoft',
+            '259960': 'Krafton',
+            '018260': 'Samsung SDS',
+            '035900': 'JYP Entertainment',
+            
+            # [EMOJI]
+            '055550': 'Shinhan Financial Group',
+            '086790': 'Hana Financial Group',
+            '105560': 'KB Financial Group',
+            '032830': 'Samsung Life Insurance',
+            
+            # [EMOJI]/[EMOJI]
+            '015760': 'Korea Electric Power',
+            '010950': 'S-Oil',
+            '009540': 'Korea Gas',
+            '034730': 'SK',
+            
+            # [EMOJI]
+            '017670': 'SK Telecom',
+            '030200': 'KT',
+            '032640': 'LG Uplus',
+            
+            # [EMOJI]/[EMOJI]
+            '000270': 'Kia',
+            '161390': 'Hanon Systems',
+            
+            # [EMOJI]/[EMOJI]
+            '005490': 'POSCO',
+            '096770': 'SK Innovation',
+            '010130': 'Korea Zinc',
+            
+            # [EMOJI]
+            '033780': 'KT&G',
+            '003550': 'LG',
+            '018880': 'Samsung Securities',
+            '000720': 'Hyundai Engineering & Construction'
+        }
+        
+        # [EMOJI] [EMOJI] [EMOJI] ([EMOJI] [EMOJI] [EMOJI])
+        for code, name in korean_stocks.items():
+            if query in code or query in name.upper():
+                ticker = f"{code}.KS"
+                try:
+                    # [EMOJI] [EMOJI] [EMOJI]
+                    price_data = get_stock_price(ticker)
+                    if price_data and price_data.get('success'):
+                        price_info = price_data.get('data', {})
+                        results.append({
+                            'ticker': ticker,
+                            'name': name,
+                            'exchange': 'KRX',
+                            'currentPrice': price_info.get('currentPrice', 0),
+                            'currency': price_info.get('currency', 'KRW'),
+                            'changePercent': price_info.get('changePercent', '0%'),
+                            'changeAmount': price_info.get('changeAmount', 0)
+                        })
+                    else:
+                        results.append({
+                            'ticker': ticker,
+                            'name': name,
+                            'exchange': 'KRX'
+                        })
+                except Exception as e:
+                    logger.debug(f"Price fetch failed for {ticker}: {str(e)}")
+                    results.append({
+                        'ticker': ticker,
+                        'name': name,
+                        'exchange': 'KRX'
+                    })
+        
+        # [EMOJI] [EMOJI] [EMOJI]
+        us_stocks = {
+            # Tech Giants
+            'AAPL': 'Apple Inc.',
+            'MSFT': 'Microsoft Corporation',
+            'GOOGL': 'Alphabet Inc.',
+            'GOOG': 'Alphabet Inc. (Class C)',
+            'AMZN': 'Amazon.com Inc.',
+            'META': 'Meta Platforms Inc.',
+            'NVDA': 'NVIDIA Corporation',
+            'TSLA': 'Tesla Inc.',
+            'AMD': 'Advanced Micro Devices',
+            'INTC': 'Intel Corporation',
+            'CSCO': 'Cisco Systems',
+            'ORCL': 'Oracle Corporation',
+            'ADBE': 'Adobe Inc.',
+            'CRM': 'Salesforce Inc.',
+            'NFLX': 'Netflix Inc.',
+            
+            # Finance
+            'BRK.B': 'Berkshire Hathaway',
+            'JPM': 'JPMorgan Chase',
+            'V': 'Visa Inc.',
+            'MA': 'Mastercard Inc.',
+            'BAC': 'Bank of America',
+            'WFC': 'Wells Fargo',
+            'GS': 'Goldman Sachs',
+            'MS': 'Morgan Stanley',
+            'C': 'Citigroup',
+            'AXP': 'American Express',
+            
+            # Consumer
+            'WMT': 'Walmart Inc.',
+            'HD': 'Home Depot',
+            'DIS': 'Walt Disney',
+            'MCD': 'McDonald\'s Corporation',
+            'NKE': 'Nike Inc.',
+            'SBUX': 'Starbucks Corporation',
+            'KO': 'Coca-Cola Company',
+            'PEP': 'PepsiCo Inc.',
+            'COST': 'Costco Wholesale',
+            'TGT': 'Target Corporation',
+            
+            # Healthcare
+            'UNH': 'UnitedHealth Group',
+            'JNJ': 'Johnson & Johnson',
+            'PFE': 'Pfizer Inc.',
+            'ABBV': 'AbbVie Inc.',
+            'TMO': 'Thermo Fisher Scientific',
+            'ABT': 'Abbott Laboratories',
+            'MRK': 'Merck & Co.',
+            'LLY': 'Eli Lilly and Company',
+            
+            # Energy
+            'XOM': 'Exxon Mobil',
+            'CVX': 'Chevron Corporation',
+            
+            # Telecom
+            'T': 'AT&T Inc.',
+            'VZ': 'Verizon Communications',
+            
+            # Industrial
+            'BA': 'Boeing Company',
+            'CAT': 'Caterpillar Inc.',
+            'GE': 'General Electric'
+        }
+        
+        # [EMOJI] [EMOJI] [EMOJI] ([EMOJI] [EMOJI] [EMOJI])
+        for ticker, name in us_stocks.items():
+            if query in ticker or query in name.upper():
+                if not any(r['ticker'] == ticker for r in results):
+                    # Determine exchange based on ticker
+                    exchange = 'NYSE' if ticker in ['BRK.B', 'JPM', 'V', 'BAC', 'WMT', 'JNJ', 'PG', 'KO', 'PEP', 'XOM', 'CVX', 'BA', 'CAT', 'GE'] else 'NASDAQ'
+                    try:
+                        # [EMOJI] [EMOJI] [EMOJI]
+                        price_data = get_stock_price(ticker)
+                        if price_data and price_data.get('success'):
+                            price_info = price_data.get('data', {})
+                            results.append({
+                                'ticker': ticker,
+                                'name': name,
+                                'exchange': exchange,
+                                'currentPrice': price_info.get('currentPrice', 0),
+                                'currency': price_info.get('currency', 'USD'),
+                                'changePercent': price_info.get('changePercent', '0%'),
+                                'changeAmount': price_info.get('changeAmount', 0)
+                            })
+                        else:
+                            results.append({
+                                'ticker': ticker,
+                                'name': name,
+                                'exchange': exchange
+                            })
+                    except Exception as e:
+                        logger.debug(f"Price fetch failed for {ticker}: {str(e)}")
+                        results.append({
+                            'ticker': ticker,
+                            'name': name,
+                            'exchange': exchange
+                        })
+        
+        # Alpha Vantage API[EMOJI] [EMOJI] ([EMOJI] DB[EMOJI] [EMOJI] [EMOJI])
+        if len(results) == 0:
+            try:
+                logger.info(f"Searching Alpha Vantage for: {query}")
+                av_url = f'https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey={ALPHA_VANTAGE_KEY}'
+                av_response = requests.get(av_url, timeout=5)
+                av_data = av_response.json()
+                
+                for match in av_data.get('bestMatches', [])[:10]:
+                    ticker = match.get('1. symbol', '')
+                    name = match.get('2. name', '')
+                    region = match.get('4. region', 'Unknown')
+                    match_score = match.get('9. matchScore', '0')
+                    
+                    # [EMOJI] [EMOJI] 0.5 [EMOJI] [EMOJI] [EMOJI]
+                    if float(match_score) >= 0.5:
+                        results.append({
+                            'ticker': ticker,
+                            'name': name,
+                            'exchange': region
+                        })
+                
+                logger.info(f"Alpha Vantage found {len(results)} results")
+                
+            except requests.exceptions.Timeout:
+                logger.warning("Alpha Vantage API timeout")
+            except Exception as e:
+                logger.warning(f"Alpha Vantage API error: {str(e)}")
+                # Fallback to yfinance
+                try:
+                    stock = yf.Ticker(query)
+                    info = stock.info
+                    
+                    if info and 'longName' in info:
+                        results.append({
+                            'ticker': query,
+                            'name': info.get('longName', query),
+                            'exchange': info.get('exchange', 'UNKNOWN')
+                        })
+                except Exception as yf_error:
+                    logger.debug(f"yfinance lookup also failed: {str(yf_error)}")
+        
+        # [EMOJI] 10[EMOJI] [EMOJI] [EMOJI]
+        return jsonify(results[:10])
+        
+    except Exception as e:
+        error_msg = safe_encode_error(str(e))
+        # Traceback[EMOJI] [EMOJI] [EMOJI]
+        try:
+            tb_str = traceback.format_exc()
+            safe_tb = safe_encode_error(tb_str)
+            logger.error(f"[EMOJI] [EMOJI] [EMOJI]: {error_msg}\n{safe_tb}")
+        except:
+            logger.error(f"[EMOJI] [EMOJI] [EMOJI]: {error_msg}")
+        return jsonify([])
+
+
+@app.errorhandler(404)
+def not_found(error):
+    """404 [EMOJI] [EMOJI]"""
+    return jsonify({
+        'success': False,
+        'error': '[EMOJI] [EMOJI] [EMOJI] [EMOJI].'
+    }), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    """500 [EMOJI] [EMOJI]"""
+    return jsonify({
+        'success': False,
+        'error': '[EMOJI] [EMOJI] [EMOJI] [EMOJI].'
+    }), 500
+
+
+if __name__ == '__main__':
+    # UTF-8 [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+    import sys
+    if sys.platform == 'win32':
+        # [EMOJI] [EMOJI] UTF-8 [EMOJI] [EMOJI]
+        import os
+        if os.getenv('PYTHONIOENCODING') == 'utf-8' or os.getenv('PYTHONUTF8') == '1':
+            print("[INFO] UTF-8 encoding enabled via environment variables")
+        else:
+            print("[INFO] UTF-8 encoding recommended. Set PYTHONIOENCODING=utf-8")
+    
+    print("=" * 60)
+    print("ToAndFrom Portfolio Optimization API Server")
+    print("=" * 60)
+    print("API Endpoints:")
+    print("   GET  /              - API Information")
+    print("   GET  /api/health    - Server Status")
+    print("   POST /api/optimize  - Portfolio Optimization")
+    print("   POST /api/optimize/with-weights - Optimization with weights")
+    print("   POST /api/optimize/batch - Batch Optimization")
+    print("=" * 60)
+    print("Server URL: http://127.0.0.1:5000")
+    print("Health Check: http://127.0.0.1:5000/api/health")
+    print("=" * 60)
+    print("Fast Mode (default): reps=1, maxiter=50")
+    print("Precise Mode: fast_mode=false (reps=2, maxiter=100)")
+    print("=" * 60)
+    print("Windows cp949 compatible: emoji-free responses")
+    print("=" * 60)
+    
+    # [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+    # Windows[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] host[EMOJI] 127.0.0.1[EMOJI] [EMOJI]
+    try:
+        app.run(host='127.0.0.1', port=5000, debug=True, threaded=True, use_reloader=False)
+    except OSError as e:
+        if e.winerror == 10038:  # WinError 10038: An operation was attempted on something that is not a socket
+            print(f"[WARNING] Socket error detected: {e}")
+            print("   Trying alternative configuration...")
+            # Windows[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(('127.0.0.1', 5000))
+                sock.close()
+                app.run(host='127.0.0.1', port=5000, debug=False, threaded=True, use_reloader=False)
+            except Exception as e2:
+                print(f"[ERROR] Failed to start server: {e2}")
+                print("   Please check if port 5000 is already in use:")
+                print("   netstat -ano | findstr :5000")
+                raise
+        else:
+            raise
+

@@ -1,132 +1,157 @@
-/**
- * Portfolio Optimization API Client
- * AI Agent Workflow 통합
- */
-
 import axios from 'axios';
 
-const API_BASE_URL = '/api/portfolio';
+// API Base URLs - 프록시를 통해 Spring Boot로 전달됨
+const PORTFOLIO_API_URL = '/api/portfolio';
+const STOCKS_API_URL = '/api/stocks';
+const QUANTUM_API_URL = '/api';
 
 /**
- * 기본 포트폴리오 최적화
+ * 포트폴리오 최적화 (초기 가중치 없이)
  */
-export async function optimizePortfolio(inputData) {
+export const optimizePortfolio = async (inputData) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/optimize`, inputData);
+    const response = await axios.post(`${PORTFOLIO_API_URL}/optimize`, inputData);
     return response.data;
   } catch (error) {
-    console.error('Optimization error:', error);
+    console.error('Portfolio optimization failed:', error);
     throw error;
   }
-}
+};
 
 /**
- * 가중치 기반 포트폴리오 최적화
- * Spring Boot 실패 시 Flask로 자동 fallback
+ * 포트폴리오 최적화 (초기 가중치 포함)
+ * TEMPORARY: Flask 직접 호출 (Backend 우회)
  */
-export async function optimizePortfolioWithWeights(inputData) {
+export const optimizePortfolioWithWeights = async (inputData) => {
   try {
-    // Spring Boot 시도
-    const response = await axios.post(`${API_BASE_URL}/optimize/with-weights`, inputData);
-    return response.data;
-  } catch (error) {
-    // Spring Boot 실패 시 Flask로 직접 연결
-    if (error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
-      console.log('⚠️ Spring Boot 연결 실패, Flask로 직접 연결 시도...');
-      try {
-        // Flask도 같은 경로를 지원하므로 동일한 경로 사용
-        const flaskResponse = await axios.post('http://localhost:5000/api/portfolio/optimize', inputData);
-        return flaskResponse.data;
-      } catch (flaskError) {
-        console.error('❌ Flask 연결도 실패:', flaskError);
-        throw new Error('Backend services unavailable. Please start Flask (port 5000) or Spring Boot (port 8080).');
-      }
-    }
-    console.error('Optimization with weights error:', error);
-    throw error;
-  }
-}
-
-/**
- * AI Agent 워크플로우를 사용한 최적화
- * 
- * Flow:
- * 1. Form Submission
- * 2. AI Agent Processing
- * 3. Optimization (Qiskit)
- * 4. Risk Analysis
- * 5. Conditional Branching
- * 6. Action Execution
- * 
- * @param {Object} inputData - Portfolio data
- * @param {Array<string>} inputData.tickers - Stock tickers
- * @param {Array<number>} inputData.initial_weights - Initial weights (optional)
- * @param {number} inputData.risk_factor - Risk factor (0-1)
- * @param {string} inputData.method - Optimization method ('quantum' or 'classical')
- * @param {string} inputData.period - Data period ('1y', '6mo', etc.)
- * 
- * @returns {Promise<Object>} Workflow result
- */
-export async function optimizeWithWorkflow(inputData) {
-  try {
-    const response = await axios.post(`${API_BASE_URL}/optimize/workflow`, inputData, {
-      timeout: 300000, // 5 minutes for quantum
+    console.log('[DEBUG] Calling Flask directly (bypassing Backend)');
+    console.log('[DEBUG] Request data:', inputData);
+    
+    // Flask로 직접 요청 (임시 해결책)
+    const response = await axios.post('http://localhost:5000/api/optimize/with-weights', {
+      tickers: inputData.tickers,
+      initial_weights: inputData.initialWeights || inputData.weights,
+      risk_factor: inputData.riskFactor || 0.5,
+      method: inputData.method || 'quantum',
+      period: inputData.period || '1y',
+      reps: inputData.reps || 1,
+      precision: inputData.precision || 4,
+      fast_mode: true
+    }, {
+      timeout: 30000  // 30초 타임아웃 (양자 최적화 시간 고려)
     });
     
+    console.log('[SUCCESS] Flask response:', response.data);
     return response.data;
+    
   } catch (error) {
-    console.error('Workflow optimization error:', error);
-    throw error;
+    console.error('[ERROR] Flask direct call failed:', error);
+    
+    // Fallback: Backend 시도
+    console.log('[FALLBACK] Trying Backend...');
+    try {
+      const backendResponse = await axios.post(`${PORTFOLIO_API_URL}/optimize/with-weights`, inputData);
+      return backendResponse.data;
+    } catch (backendError) {
+      console.error('[ERROR] Backend also failed:', backendError);
+      throw error;
+    }
   }
-}
+};
 
 /**
- * 워크플로우 상태 조회
+ * Quantum 최적화 (비동기 워크플로우)
  */
-export async function getWorkflowStatus(workflowId) {
+export const optimizeQuantumWorkflow = async (inputData) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/workflow/${workflowId}/status`);
-    return response.data;
-  } catch (error) {
-    console.error('Get workflow status error:', error);
-    throw error;
-  }
-}
-
-/**
- * 실시간 주가 조회
- */
-export async function getStockPrice(symbol) {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/stock/price/${symbol}`);
-    return response.data;
-  } catch (error) {
-    console.error('Get stock price error:', error);
-    throw error;
-  }
-}
-
-/**
- * 주식 검색
- */
-export async function searchStocks(query) {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/stock/search`, {
-      params: { q: query }
+    const response = await axios.post(`${PORTFOLIO_API_URL}/optimize/workflow`, inputData, {
+      timeout: 300000, // 5 minutes for quantum optimization
     });
     return response.data;
   } catch (error) {
-    console.error('Search stocks error:', error);
+    console.error('Quantum workflow optimization failed:', error);
     throw error;
   }
-}
+};
+
+/**
+ * 워크플로우 상태 확인
+ */
+export const getWorkflowStatus = async (workflowId) => {
+  try {
+    const response = await axios.get(`${PORTFOLIO_API_URL}/workflow/${workflowId}/status`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch workflow status:', error);
+    throw error;
+  }
+};
+
+/**
+ * 주식 가격 조회
+ */
+export const getStockPrice = async (symbol) => {
+  try {
+    const response = await axios.get(`${STOCKS_API_URL}/price/${symbol}`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch stock price:', error);
+    throw error;
+  }
+};
+
+/**
+ * 주식 검색 (글로벌 + 한국)
+ * Backend: GET /api/stocks/search?query=AAPL
+ */
+export const searchStocks = async (query) => {
+  try {
+    const response = await axios.get(`${STOCKS_API_URL}/search`, {
+      params: { query: query }  // 파라미터 이름: 'query'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Stock search failed:', error);
+    throw error;
+  }
+};
+
+/**
+ * 포트폴리오 메트릭 계산
+ */
+export const calculatePortfolioMetrics = async (portfolioData) => {
+  try {
+    const response = await axios.post(`${PORTFOLIO_API_URL}/metrics`, portfolioData);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to calculate portfolio metrics:', error);
+    throw error;
+  }
+};
+
+/**
+ * 히스토리컬 데이터 가져오기
+ */
+export const getHistoricalData = async (symbols, period = '1y') => {
+  try {
+    const response = await axios.post(`${STOCKS_API_URL}/historical`, {
+      symbols,
+      period
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch historical data:', error);
+    throw error;
+  }
+};
 
 export default {
   optimizePortfolio,
   optimizePortfolioWithWeights,
-  optimizeWithWorkflow,
+  optimizeQuantumWorkflow,
   getWorkflowStatus,
   getStockPrice,
   searchStocks,
+  calculatePortfolioMetrics,
+  getHistoricalData
 };
-

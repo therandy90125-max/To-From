@@ -1,0 +1,91 @@
+import re
+import os
+
+def fix_optimizer_file():
+    """optimizer.py에서 모든 이모지 제거"""
+    
+    filepath = "C:/Users/user/Project/To-From/python-backend/optimizer.py"
+    
+    if not os.path.exists(filepath):
+        print(f"[ERROR] 파일을 찾을 수 없습니다: {filepath}")
+        return False
+    
+    # 파일 읽기
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # 백업 생성
+    backup_path = filepath + '.backup'
+    with open(backup_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print(f"[OK] 백업 생성: {backup_path}")
+    
+    # 이모지 교체 매핑
+    replacements = {
+        '🚀': '[START]',
+        '📦': '[PACKAGE]',
+        '✅': '[OK]',
+        '❌': '[ERROR]',
+        '⚠️': '[WARNING]',
+        '🎯': '[TARGET]',
+        '🔧': '[CONFIG]',
+        '📊': '[DATA]',
+        '🧪': '[TEST]',
+        '💡': '[INFO]',
+        '⏱️': '[TIME]',
+        '🔍': '[SEARCH]',
+        '📝': '[LOG]',
+        '🌐': '[WEB]',
+        '🔗': '[LINK]',
+        '📈': '[CHART]',
+        '📉': '[DOWN]',
+        '‼️': '[!!]',
+        '⚡': '[FAST]',
+    }
+    
+    # 교체 수행
+    original_content = content
+    for emoji, replacement in replacements.items():
+        content = content.replace(emoji, replacement)
+    
+    # 남은 모든 이모지 제거 (포괄적 패턴)
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F300-\U0001F9FF"  # 심볼 & 그림
+        "\U00002600-\U000027BF"  # 기타 심볼
+        "\U0001F600-\U0001F64F"  # 감정
+        "\U0001F680-\U0001F6FF"  # 교통 & 지도
+        "\U0001F1E0-\U0001F1FF"  # 국기
+        "\U00002702-\U000027B0"
+        "\U000024C2-\U0001F251"
+        "\U0001FA00-\U0001FAFF"  # 추가 심볼
+        "]+",
+        flags=re.UNICODE
+    )
+    content = emoji_pattern.sub('[EMOJI]', content)
+    
+    # 변경사항 확인
+    if content != original_content:
+        # 수정된 내용 저장
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+        print(f"[OK] 이모지 제거 완료: {filepath}")
+        print(f"[OK] 변경된 문자 수: {len(original_content) - len(content)}")
+        return True
+    else:
+        print(f"[INFO] 이모지가 발견되지 않았습니다: {filepath}")
+        return False
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("optimizer.py 이모지 제거 스크립트")
+    print("=" * 60)
+    
+    success = fix_optimizer_file()
+    
+    if success:
+        print("\n[OK] 완료! Flask 서버를 재시작하세요.")
+        print("  PowerShell에서: Ctrl+C -> .\\run-flask-utf8.ps1")
+    else:
+        print("\n[WARNING] 파일 경로를 확인하거나 수동으로 이모지를 제거하세요.")
+

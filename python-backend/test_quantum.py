@@ -1,19 +1,19 @@
 """
-양자 최적화가 제대로 작동하는지 테스트하는 스크립트
+[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
 """
 
 from optimizer import PortfolioOptimizer
 import json
 
 print("=" * 60)
-print("양자 최적화 테스트")
+print("[EMOJI] [EMOJI] [EMOJI]")
 print("=" * 60)
 
-# 테스트 티커
+# [EMOJI] [EMOJI]
 test_tickers = ['AAPL', 'GOOGL', 'MSFT']
 
-print(f"\n테스트 티커: {test_tickers}")
-print("\n1. 고전적 최적화 실행...")
+print(f"\n[EMOJI] [EMOJI]: {test_tickers}")
+print("\n1. [EMOJI] [EMOJI] [EMOJI]...")
 print("-" * 60)
 
 try:
@@ -22,69 +22,69 @@ try:
     
     result_classical = optimizer.optimize(method='classical')
     
-    print("\n고전적 최적화 결과:")
-    print(f"  선택된 주식: {result_classical['selected_tickers']}")
-    print(f"  가중치: {[f'{w:.2%}' for w in result_classical['weights']]}")
-    print(f"  예상 수익률: {result_classical['expected_return']:.4f}")
-    print(f"  리스크: {result_classical['risk']:.4f}")
-    print(f"  샤프 비율: {result_classical['sharpe_ratio']:.4f}")
-    print(f"  방법: {result_classical['method']}")
+    print("\n[EMOJI] [EMOJI] [EMOJI]:")
+    print(f"  [EMOJI] [EMOJI]: {result_classical['selected_tickers']}")
+    print(f"  [EMOJI]: {[f'{w:.2%}' for w in result_classical['weights']]}")
+    print(f"  [EMOJI] [EMOJI]: {result_classical['expected_return']:.4f}")
+    print(f"  [EMOJI]: {result_classical['risk']:.4f}")
+    print(f"  [EMOJI] [EMOJI]: {result_classical['sharpe_ratio']:.4f}")
+    print(f"  [EMOJI]: {result_classical['method']}")
     
 except Exception as e:
-    print(f"고전적 최적화 오류: {e}")
+    print(f"[EMOJI] [EMOJI] [EMOJI]: {e}")
     import traceback
     traceback.print_exc()
 
 print("\n" + "=" * 60)
-print("2. 양자 최적화 실행 (QAOA)...")
+print("2. [EMOJI] [EMOJI] [EMOJI] (QAOA)...")
 print("-" * 60)
 
 try:
-    # 새로운 optimizer 인스턴스 생성
+    # [EMOJI] optimizer [EMOJI] [EMOJI]
     optimizer_quantum = PortfolioOptimizer(test_tickers, risk_factor=0.5)
     optimizer_quantum.fetch_data(period='1y')
     
-    print("\n양자 최적화 시작...")
+    print("\n[EMOJI] [EMOJI] [EMOJI]...")
     result_quantum = optimizer_quantum.optimize(method='quantum', reps=1)
     
-    print("\n양자 최적화 결과:")
-    print(f"  선택된 주식: {result_quantum['selected_tickers']}")
-    print(f"  가중치: {[f'{w:.2%}' for w in result_quantum['weights']]}")
-    print(f"  예상 수익률: {result_quantum['expected_return']:.4f}")
-    print(f"  리스크: {result_quantum['risk']:.4f}")
-    print(f"  샤프 비율: {result_quantum['sharpe_ratio']:.4f}")
-    print(f"  방법: {result_quantum['method']}")
+    print("\n[EMOJI] [EMOJI] [EMOJI]:")
+    print(f"  [EMOJI] [EMOJI]: {result_quantum['selected_tickers']}")
+    print(f"  [EMOJI]: {[f'{w:.2%}' for w in result_quantum['weights']]}")
+    print(f"  [EMOJI] [EMOJI]: {result_quantum['expected_return']:.4f}")
+    print(f"  [EMOJI]: {result_quantum['risk']:.4f}")
+    print(f"  [EMOJI] [EMOJI]: {result_quantum['sharpe_ratio']:.4f}")
+    print(f"  [EMOJI]: {result_quantum['method']}")
     print(f"  Reps: {result_quantum.get('reps', 'N/A')}")
     
     print("\n" + "=" * 60)
-    print("결과 비교:")
+    print("[EMOJI] [EMOJI]:")
     print("=" * 60)
     
     if result_classical['selected_tickers'] == result_quantum['selected_tickers']:
-        print("⚠️  선택된 주식이 동일합니다!")
-        print("   이는 양자 최적화가 최적해를 찾았거나,")
-        print("   양자 최적화가 제대로 작동하지 않았을 수 있습니다.")
+        print("[WARNING] [EMOJI] [EMOJI] [EMOJI]!")
+        print("   [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI],")
+        print("   [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI].")
     else:
-        print("✅ 선택된 주식이 다릅니다!")
-        print("   양자 최적화가 다른 결과를 찾았습니다.")
+        print("[SUCCESS] [EMOJI] [EMOJI] [EMOJI]!")
+        print("   [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI].")
     
-    print(f"\n고전적: {result_classical['selected_tickers']}")
-    print(f"양자:   {result_quantum['selected_tickers']}")
+    print(f"\n[EMOJI]: {result_classical['selected_tickers']}")
+    print(f"[EMOJI]:   {result_quantum['selected_tickers']}")
     
-    print(f"\n고전적 수익률: {result_classical['expected_return']:.4f}")
-    print(f"양자 수익률:   {result_quantum['expected_return']:.4f}")
+    print(f"\n[EMOJI] [EMOJI]: {result_classical['expected_return']:.4f}")
+    print(f"[EMOJI] [EMOJI]:   {result_quantum['expected_return']:.4f}")
     
     if abs(result_classical['expected_return'] - result_quantum['expected_return']) < 0.0001:
-        print("\n⚠️  수익률이 거의 동일합니다!")
+        print("\n[WARNING] [EMOJI] [EMOJI] [EMOJI]!")
     else:
-        print("\n✅ 수익률이 다릅니다!")
+        print("\n[SUCCESS] [EMOJI] [EMOJI]!")
     
 except Exception as e:
-    print(f"\n❌ 양자 최적화 오류: {e}")
+    print(f"\n[ERROR] [EMOJI] [EMOJI] [EMOJI]: {e}")
     import traceback
     traceback.print_exc()
 
 print("\n" + "=" * 60)
-print("테스트 완료")
+print("[EMOJI] [EMOJI]")
 print("=" * 60)
 

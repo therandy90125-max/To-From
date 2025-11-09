@@ -3,16 +3,15 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { getCurrencySymbol, getCurrencyCode } from '../utils/currencyUtils';
 import StockSearchInput from './StockSearchInput';
 import CurrencyDisplay from './CurrencyDisplay';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA'];
 
-const Dashboard = () => {
+const Dashboard = ({ onNavigate }) => {
   const { t, language } = useLanguage();
   const currencySymbol = getCurrencySymbol(language);
   const currencyCode = getCurrencyCode(language);
-  
-  // Portfolio state - User's current holdings
+
   const [portfolio, setPortfolio] = useState([
     { ticker: '005930.KS', name: 'Samsung Electronics', shares: 10, avgPrice: 70000, exchange: 'KRX' },
     { ticker: '000270.KS', name: 'Kia Corporation', shares: 15, avgPrice: 95000, exchange: 'KRX' },
@@ -24,267 +23,352 @@ const Dashboard = () => {
   const [totalCost, setTotalCost] = useState(0);
   const [showAddStock, setShowAddStock] = useState(false);
 
-  // Calculate portfolio metrics
   useEffect(() => {
     let cost = 0;
     let value = 0;
-    
-    portfolio.forEach(stock => {
+
+    portfolio.forEach((stock) => {
       cost += stock.shares * stock.avgPrice;
       const currentPrice = currentPrices[stock.ticker] || stock.avgPrice;
       value += stock.shares * currentPrice;
     });
-    
+
     setTotalCost(cost);
     setTotalValue(value);
   }, [portfolio, currentPrices]);
 
-  // Add new stock to portfolio
   const handleAddStock = (stock) => {
-    const exists = portfolio.some(s => s.ticker === stock.ticker || s.ticker === stock.symbol);
+    const exists = portfolio.some((s) => s.ticker === stock.ticker || s.ticker === stock.symbol);
     if (!exists) {
-      setPortfolio([...portfolio, {
-        ticker: stock.ticker || stock.symbol,
-        name: stock.name,
-        shares: 0,
-        avgPrice: 0,
-        exchange: stock.exchange || 'NASDAQ'
-      }]);
+      setPortfolio([
+        ...portfolio,
+        {
+          ticker: stock.ticker || stock.symbol,
+          name: stock.name,
+          shares: 0,
+          avgPrice: 0,
+          exchange: stock.exchange || 'NASDAQ',
+        },
+      ]);
       setShowAddStock(false);
     }
   };
 
-  // Update stock data
   const updateStock = (index, field, value) => {
-    const newPortfolio = [...portfolio];
-    newPortfolio[index][field] = parseFloat(value) || 0;
-    setPortfolio(newPortfolio);
+    const nextPortfolio = [...portfolio];
+    nextPortfolio[index][field] = parseFloat(value) || 0;
+    setPortfolio(nextPortfolio);
   };
 
-  // Remove stock from portfolio
   const removeStock = (index) => {
-    const newPortfolio = portfolio.filter((_, i) => i !== index);
-    setPortfolio(newPortfolio);
+    const nextPortfolio = portfolio.filter((_, i) => i !== index);
+    setPortfolio(nextPortfolio);
   };
 
-  // Update current price from StockPriceWidget callback
-  const handlePriceUpdate = (ticker, price) => {
-    setCurrentPrices(prev => ({ ...prev, [ticker]: price }));
-  };
-
-  // Calculate portfolio distribution for pie chart
   const portfolioDistribution = portfolio
-    .filter(stock => stock.shares > 0)
-    .map(stock => {
+    .filter((stock) => stock.shares > 0)
+    .map((stock) => {
       const currentPrice = currentPrices[stock.ticker] || stock.avgPrice;
       const value = stock.shares * currentPrice;
+      const baseName = (stock.name || stock.ticker).split('(')[0].trim();
       return {
-        name: stock.name.split(' ')[0], // 짧은 이름
+        name: baseName,
         ticker: stock.ticker,
-        value: value,
-        percentage: (value / totalValue) * 100
+        value,
+        percentage: totalValue > 0 ? (value / totalValue) * 100 : 0,
       };
-    });
+    })
+    .filter((entry) => entry.value > 0);
 
   const totalReturn = totalValue - totalCost;
   const returnPercentage = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
+  const activeHoldingsCount = portfolio.filter((s) => s.shares > 0).length;
 
-  // Navigate to optimizer page
+  const heroHighlights = [
+    { label: t('landingHeroMetricQuantumLabel'), value: t('landingHeroMetricQuantumValue') },
+    { label: t('landingHeroMetricCoverageLabel'), value: t('landingHeroMetricCoverageValue') },
+    { label: t('landingHeroMetricLatencyLabel'), value: t('landingHeroMetricLatencyValue') },
+  ];
+
+  const featuredStocks = portfolio.slice(0, 3).map((stock) => {
+    const currentPrice = currentPrices[stock.ticker] || stock.avgPrice || 0;
+    const baseline = stock.avgPrice || (currentPrice || 1);
+    const change = baseline > 0 ? ((currentPrice - baseline) / baseline) * 100 : 0;
+    const value = stock.shares * currentPrice;
+
+    return {
+      ticker: stock.ticker,
+      name: stock.name,
+      change,
+      value,
+    };
+  });
+
   const handleOptimize = () => {
-    // Save portfolio to localStorage for optimizer to use
-    localStorage.setItem('currentPortfolio', JSON.stringify({
-      portfolio,
-      totalValue,
-      totalCost,
-      timestamp: new Date().toISOString()
-    }));
-    
-    // Navigate to optimizer page using custom event
-    window.dispatchEvent(new CustomEvent('navigateTo', { detail: { page: 'optimizer' } }));
+    try {
+      // 포트폴리오 데이터를 localStorage에 저장
+      localStorage.setItem(
+        'currentPortfolio',
+        JSON.stringify({
+          portfolio,
+          totalValue,
+          totalCost,
+          timestamp: new Date().toISOString(),
+        }),
+      );
+
+      // 직접 네비게이션 함수 사용 (우선)
+      if (onNavigate) {
+        console.log('[Dashboard] Navigating via onNavigate prop');
+        onNavigate('optimizer');
+        return;
+      }
+
+      // Fallback: 네비게이션 이벤트 발생
+      const navigateEvent = new CustomEvent('navigateTo', { 
+        detail: { page: 'optimizer' },
+        bubbles: true,
+        cancelable: true
+      });
+      
+      console.log('[Dashboard] Dispatching navigateTo event:', navigateEvent.detail);
+      window.dispatchEvent(navigateEvent);
+    } catch (error) {
+      console.error('[Dashboard] Navigation error:', error);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            📊 {t('dashboard')}
-          </h1>
-          <p className="text-gray-600">
-            {t('portfolioOverview')}
-          </p>
-        </div>
-
-        {/* Portfolio Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Total Value */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">{t('totalPortfolioValue')}</span>
-              <span className="text-2xl">💰</span>
-            </div>
-            <div className="text-3xl font-bold text-gray-900">
-              {currencySymbol}{totalValue.toLocaleString()}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">{currencyCode}</div>
-          </div>
-
-          {/* Total Return */}
-          <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${totalReturn >= 0 ? 'border-green-500' : 'border-red-500'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">{t('totalReturn')}</span>
-              <span className="text-2xl">{totalReturn >= 0 ? '📈' : '📉'}</span>
-            </div>
-            <div className={`text-3xl font-bold ${totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {totalReturn >= 0 ? '+' : ''}{currencySymbol}{totalReturn.toLocaleString()}
-            </div>
-            <div className={`text-sm mt-1 ${totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {returnPercentage >= 0 ? '+' : ''}{returnPercentage.toFixed(2)}%
-            </div>
-          </div>
-
-          {/* Number of Holdings */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 border-l-4 border-purple-500">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">{t('holdings')}</span>
-              <span className="text-2xl">🎯</span>
-            </div>
-            <div className="text-3xl font-bold text-gray-900">
-              {portfolio.filter(s => s.shares > 0).length}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">{t('stocks')}</div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column: Portfolio Holdings */}
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                📋 {t('currentHoldings')}
-              </h2>
+    <div className="dashboard-page">
+      <div className="dashboard-container">
+        <section className="landing-hero">
+          <div className="hero-text">
+            <span className="hero-badge">Quantum • AI • Finance</span>
+            <h1>{t('landingHeroTitle')}</h1>
+            <p>{t('landingHeroSubtitle')}</p>
+            <div className="hero-actions">
               <button
-                onClick={() => setShowAddStock(!showAddStock)}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                type="button"
+                className="hero-button primary"
+                onClick={handleOptimize}
+                disabled={activeHoldingsCount < 2}
               >
-                + {t('addStock')}
+                {t('landingHeroButtonPrimary')}
+              </button>
+              <button
+                type="button"
+                className="hero-button secondary"
+                onClick={() => setShowAddStock(true)}
+              >
+                {t('landingHeroButtonSecondary')}
               </button>
             </div>
-
-            {/* Add Stock Search */}
-            {showAddStock && (
-              <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-                <StockSearchInput onSelectStock={handleAddStock} />
-              </div>
-            )}
-
-            {/* Holdings Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('stock')}
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('shares')}
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('avgPrice')}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('value')}
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {portfolio.map((stock, index) => {
-                    const currentPrice = currentPrices[stock.ticker] || stock.avgPrice;
-                    const value = stock.shares * currentPrice;
-                    const pl = stock.shares * (currentPrice - stock.avgPrice);
-                    const plPercent = stock.avgPrice > 0 ? ((currentPrice - stock.avgPrice) / stock.avgPrice) * 100 : 0;
-
-                    return (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-gray-900">{stock.ticker}</span>
-                            <span className="text-xs text-gray-500">{stock.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <input
-                            type="number"
-                            value={stock.shares}
-                            onChange={(e) => updateStock(index, 'shares', e.target.value)}
-                            className="w-20 px-2 py-1 border border-gray-300 rounded text-center text-sm"
-                            min="0"
-                          />
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <input
-                            type="number"
-                            value={stock.avgPrice}
-                            onChange={(e) => updateStock(index, 'avgPrice', e.target.value)}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded text-center text-sm"
-                            min="0"
-                          />
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <div className="flex flex-col items-end">
-                            <div className="font-medium text-gray-900">
-                              <CurrencyDisplay 
-                                amount={value} 
-                                currency={stock.exchange === 'KRX' || stock.exchange === 'KOSPI' || stock.exchange === 'KOSDAQ' ? 'KRW' : 'USD'}
-                                showConversion={true}
-                              />
-                            </div>
-                            <div className={`text-xs ${pl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              <CurrencyDisplay 
-                                amount={Math.abs(pl)} 
-                                currency={stock.exchange === 'KRX' || stock.exchange === 'KOSPI' || stock.exchange === 'KOSDAQ' ? 'KRW' : 'USD'}
-                                showConversion={false}
-                              />
-                              <span className="ml-1">({pl >= 0 ? '+' : ''}{plPercent.toFixed(1)}%)</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => removeStock(index)}
-                            className="text-red-500 hover:text-red-700 text-sm font-medium"
-                          >
-                            🗑️
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              {portfolio.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
-                  <div className="text-4xl mb-2">📂</div>
-                  <p>{t('noStocks')}</p>
-                  <p className="text-sm">{t('addStocksToStart')}</p>
+            <div className="hero-metrics">
+              {heroHighlights.map((highlight) => (
+                <div className="hero-metric" key={highlight.label}>
+                  <span className="metric-label">{highlight.label}</span>
+                  <span className="metric-value">{highlight.value}</span>
                 </div>
-              )}
+              ))}
             </div>
           </div>
 
-          {/* Right Column: Portfolio Distribution */}
-          <div className="space-y-6">
-            {/* Pie Chart */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                🥧 {t('portfolioDistribution')}
-              </h2>
-              
+          <div className="hero-visual">
+            <div className="hero-card">
+              <div className="hero-card-header">
+                <h3>{t('landingHeroFeaturedTitle')}</h3>
+                <p>{t('landingHeroFeaturedSubtitle')}</p>
+              </div>
+              <ul className="hero-featured-list">
+                {featuredStocks.map((stock) => (
+                  <li key={stock.ticker} className="hero-featured-item">
+                    <div>
+                      <span className="hero-featured-ticker">{stock.ticker}</span>
+                      <span className="hero-featured-name">{stock.name}</span>
+                    </div>
+                    <div className="hero-featured-stats">
+                      <span className={`hero-featured-change ${stock.change >= 0 ? 'positive' : 'negative'}`}>
+                        {stock.change >= 0 ? '+' : ''}
+                        {Number.isFinite(stock.change) ? stock.change.toFixed(2) : '0.00'}%
+                      </span>
+                      <span className="hero-featured-value">
+                        {currencySymbol}
+                        {Number.isFinite(stock.value) ? stock.value.toLocaleString() : '0'}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="hero-featured-footer">{t('landingHeroFeaturedChange')}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="dashboard-section">
+          <div className="dashboard-header">
+            <div>
+              <h2>{t('portfolioOverview')}</h2>
+              <p>{t('optimizePortfolioDesc')}</p>
+            </div>
+            <div className="dashboard-code">
+              <span>{t('totalPortfolioValue')}</span>
+              <strong>
+                {currencySymbol}
+                {totalValue.toLocaleString()}
+                <small>{currencyCode}</small>
+              </strong>
+            </div>
+          </div>
+
+          <div className="summary-grid">
+            <div className="summary-card-modern border-blue">
+              <span>{t('totalPortfolioValue')}</span>
+              <strong>
+                {currencySymbol}
+                {totalValue.toLocaleString()}
+              </strong>
+              <small>{currencyCode}</small>
+            </div>
+            <div className="summary-card-modern border-green">
+              <span>{t('totalReturn')}</span>
+              <strong className={totalReturn >= 0 ? 'positive' : 'negative'}>
+                {totalReturn >= 0 ? '+' : ''}
+                {currencySymbol}
+                {totalReturn.toLocaleString()}
+              </strong>
+              <small className={totalReturn >= 0 ? 'positive' : 'negative'}>
+                {returnPercentage >= 0 ? '+' : ''}
+                {returnPercentage.toFixed(2)}%
+              </small>
+            </div>
+            <div className="summary-card-modern border-purple">
+              <span>{t('holdings')}</span>
+              <strong>{activeHoldingsCount}</strong>
+              <small>{t('stocks')}</small>
+            </div>
+          </div>
+
+          <div className="content-grid">
+            <div className="card-modern">
+              <div className="card-header">
+                <h3>{t('currentHoldings')}</h3>
+                <button
+                  type="button"
+                  className="card-cta"
+                  onClick={() => setShowAddStock(!showAddStock)}
+                >
+                  + {t('addStock')}
+                </button>
+              </div>
+
+              {showAddStock && (
+                <div className="card-search">
+                  <StockSearchInput onSelectStock={handleAddStock} />
+                </div>
+              )}
+
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t('stock')}</th>
+                      <th>{t('shares')}</th>
+                      <th>{t('avgPrice')}</th>
+                      <th>{t('value')}</th>
+                      <th>{t('actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {portfolio.map((stock, index) => {
+                      const currentPrice = currentPrices[stock.ticker] || stock.avgPrice;
+                      const value = stock.shares * currentPrice;
+                      const pl = stock.shares * (currentPrice - stock.avgPrice);
+                      const plPercent = stock.avgPrice > 0 ? ((currentPrice - stock.avgPrice) / stock.avgPrice) * 100 : 0;
+
+                      return (
+                        <tr key={index}>
+                          <td>
+                            <div className="stock-cell">
+                              <span className="ticker">{stock.ticker}</span>
+                              <span className="name">{stock.name}</span>
+                            </div>
+                          </td>
+                          <td className="numeric">
+                            <input
+                              type="number"
+                              value={stock.shares}
+                              onChange={(e) => updateStock(index, 'shares', e.target.value)}
+                              min="0"
+                            />
+                          </td>
+                          <td className="numeric">
+                            <input
+                              type="number"
+                              value={stock.avgPrice}
+                              onChange={(e) => updateStock(index, 'avgPrice', e.target.value)}
+                              min="0"
+                            />
+                          </td>
+                          <td className="numeric">
+                            <div className="value-cell">
+                              <CurrencyDisplay
+                                amount={value}
+                                currency={
+                                  stock.exchange === 'KRX' ||
+                                  stock.exchange === 'KOSPI' ||
+                                  stock.exchange === 'KOSDAQ'
+                                    ? 'KRW'
+                                    : 'USD'
+                                }
+                                showConversion={true}
+                              />
+                              <span className={`pl ${pl >= 0 ? 'positive' : 'negative'}`}>
+                                <CurrencyDisplay
+                                  amount={Math.abs(pl)}
+                                  currency={
+                                    stock.exchange === 'KRX' ||
+                                    stock.exchange === 'KOSPI' ||
+                                    stock.exchange === 'KOSDAQ'
+                                      ? 'KRW'
+                                      : 'USD'
+                                  }
+                                  showConversion={false}
+                                />
+                                <em>
+                                  ({pl >= 0 ? '+' : ''}
+                                  {plPercent.toFixed(1)}%)
+                                </em>
+                              </span>
+                            </div>
+                          </td>
+                          <td className="numeric">
+                            <button
+                              type="button"
+                              className="remove-btn"
+                              onClick={() => removeStock(index)}
+                            >
+                              ×
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {portfolio.length === 0 && (
+                  <div className="empty-state">
+                    <p>{t('noStocks')}</p>
+                    <span>{t('addStocksToStart')}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card-modern">
+              <div className="card-header">
+                <h3>{t('portfolioDistribution')}</h3>
+              </div>
               {portfolioDistribution.length > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={300}>
@@ -294,7 +378,9 @@ const Dashboard = () => {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percentage }) => `${name} ${percentage.toFixed(1)}%`}
+                        label={({ name, ticker, percentage }) =>
+                          `${name} (${ticker}) ${percentage.toFixed(1)}%`
+                        }
                         outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"
@@ -303,22 +389,25 @@ const Dashboard = () => {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value) => `${currencySymbol}${value.toLocaleString()}`} />
+                      <Tooltip
+                        formatter={(value, _name, entry) => [
+                          `${currencySymbol}${Number(value).toLocaleString()}`,
+                          entry?.payload?.ticker || ''
+                        ]}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
-
-                  {/* Legend */}
-                  <div className="mt-4 space-y-2">
+                  <div className="chart-legend">
                     {portfolioDistribution.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-4 h-4 rounded"
-                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                          />
-                          <span className="text-sm font-medium text-gray-700">{item.ticker}</span>
-                        </div>
-                        <span className="text-sm font-bold text-gray-900">
+                      <div key={item.ticker} className="legend-row">
+                        <span
+                          className="bullet"
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        <span className="legend-name">
+                          {item.ticker} · {item.name}
+                        </span>
+                        <span className="legend-value">
                           {item.percentage.toFixed(1)}%
                         </span>
                       </div>
@@ -326,39 +415,34 @@ const Dashboard = () => {
                   </div>
                 </>
               ) : (
-                <div className="text-center py-12 text-gray-400">
-                  <div className="text-6xl mb-4">📊</div>
+                <div className="empty-state">
                   <p>{t('addStocksToSeeDistribution')}</p>
                 </div>
               )}
             </div>
-
-            {/* Optimize Button */}
-            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
-              <h3 className="text-xl font-bold mb-2">
-                🚀 {t('readyToOptimize')}
-              </h3>
-              <p className="text-indigo-100 text-sm mb-4">
-                {t('optimizePortfolioDesc')}
-              </p>
-              <button
-                onClick={handleOptimize}
-                disabled={portfolio.filter(s => s.shares > 0).length < 2}
-                className="w-full bg-white text-indigo-600 font-bold py-3 px-6 rounded-lg hover:bg-indigo-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {t('optimizeMyPortfolio')} →
-              </button>
-              {portfolio.filter(s => s.shares > 0).length < 2 && (
-                <p className="text-xs text-indigo-200 mt-2 text-center">
-                  {t('needAtLeast2Stocks')}
-                </p>
-              )}
-            </div>
           </div>
-        </div>
+
+          <div className="callout-modern">
+            <div>
+              <h3>{t('readyToOptimize')}</h3>
+              <p>{t('optimizePortfolioDesc')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleOptimize}
+              disabled={activeHoldingsCount < 2}
+            >
+              {t('optimizeMyPortfolio')} →
+            </button>
+          </div>
+          {activeHoldingsCount < 2 && (
+            <p className="callout-hint">{t('needAtLeast2Stocks')}</p>
+          )}
+        </section>
       </div>
     </div>
   );
 };
 
 export default Dashboard;
+

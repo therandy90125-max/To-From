@@ -1,6 +1,6 @@
 """
 AI Agent Workflow Engine for Portfolio Optimization
-포트폴리오 최적화를 위한 AI Agent 워크플로우 엔진
+[EMOJI] [EMOJI] [EMOJI] AI Agent [EMOJI] [EMOJI]
 """
 
 import logging
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class WorkflowState(Enum):
-    """워크플로우 상태"""
+    """[EMOJI] [EMOJI]"""
     STARTED = "started"
     PROCESSING = "processing"
     ANALYZING = "analyzing"
@@ -22,14 +22,14 @@ class WorkflowState(Enum):
 
 
 class RiskLevel(Enum):
-    """위험도 레벨"""
+    """[EMOJI] [EMOJI]"""
     LOW = "low"           # < 15% volatility
     MEDIUM = "medium"     # 15-25% volatility
     HIGH = "high"         # > 25% volatility
 
 
 class WorkflowMemory:
-    """워크플로우 메모리 (컨텍스트 저장)"""
+    """[EMOJI] [EMOJI] ([EMOJI] [EMOJI])"""
     
     def __init__(self):
         self.context = {}
@@ -40,7 +40,7 @@ class WorkflowMemory:
         }
     
     def store(self, key: str, value: Any):
-        """메모리에 데이터 저장"""
+        """[EMOJI] [EMOJI] [EMOJI]"""
         self.context[key] = value
         self.history.append({
             'timestamp': datetime.now().isoformat(),
@@ -49,11 +49,11 @@ class WorkflowMemory:
         })
     
     def retrieve(self, key: str) -> Optional[Any]:
-        """메모리에서 데이터 조회"""
+        """[EMOJI] [EMOJI] [EMOJI]"""
         return self.context.get(key)
     
     def get_context(self) -> Dict:
-        """전체 컨텍스트 반환"""
+        """[EMOJI] [EMOJI] [EMOJI]"""
         return self.context.copy()
 
 
@@ -73,7 +73,7 @@ class AIAgent:
         logger.info(f"AI Agent '{name}' initialized")
     
     def add_tool(self, tool_name: str, tool_func):
-        """에이전트에 도구 추가"""
+        """[EMOJI] [EMOJI] [EMOJI]"""
         self.tools.append({
             'name': tool_name,
             'function': tool_func
@@ -81,7 +81,7 @@ class AIAgent:
         logger.info(f"Tool '{tool_name}' added to agent")
     
     def process(self, input_data: Dict) -> Dict:
-        """입력 데이터 처리"""
+        """[EMOJI] [EMOJI] [EMOJI]"""
         self.state = WorkflowState.PROCESSING
         self.memory.store('input', input_data)
         
@@ -94,7 +94,7 @@ class AIAgent:
         }
     
     def analyze_risk(self, optimization_result: Dict) -> Dict:
-        """위험도 분석 및 분류"""
+        """[EMOJI] [EMOJI] [EMOJI] [EMOJI]"""
         self.state = WorkflowState.ANALYZING
         
         risk_value = optimization_result.get('risk', 0)
@@ -125,7 +125,7 @@ class AIAgent:
         return analysis
     
     def decide_action(self, risk_analysis: Dict) -> str:
-        """위험도에 따른 액션 결정"""
+        """[EMOJI] [EMOJI] [EMOJI] [EMOJI]"""
         self.state = WorkflowState.BRANCHING
         
         risk_level = risk_analysis.get('risk_level')
@@ -145,7 +145,7 @@ class AIAgent:
         return action
     
     def get_memory_context(self) -> Dict:
-        """메모리 컨텍스트 반환"""
+        """[EMOJI] [EMOJI] [EMOJI]"""
         return self.memory.get_context()
 
 
@@ -161,7 +161,7 @@ class WorkflowEngine:
         logger.info("Workflow Engine initialized")
     
     def create_workflow(self, workflow_id: str, agent: AIAgent):
-        """새 워크플로우 생성"""
+        """[EMOJI] [EMOJI] [EMOJI]"""
         self.workflows[workflow_id] = {
             'id': workflow_id,
             'agent': agent,
@@ -175,7 +175,7 @@ class WorkflowEngine:
     def execute_workflow(self, workflow_id: str, input_data: Dict, 
                         optimization_func) -> Dict:
         """
-        워크플로우 실행 (다이어그램 플로우)
+        [EMOJI] [EMOJI] ([EMOJI] [EMOJI])
         
         Flow:
         1. Form Submission (input_data)
@@ -219,7 +219,8 @@ class WorkflowEngine:
                 input_data.get('initial_weights'),
                 input_data.get('risk_factor', 0.5),
                 input_data.get('method', 'classical'),
-                input_data.get('period', '1y')
+                input_data.get('period', '1y'),
+                input_data.get('fast_mode', True)  # Fast mode [EMOJI] [EMOJI]
             )
             
             agent.memory.store('optimization_result', optimization_result)
@@ -298,7 +299,7 @@ class WorkflowEngine:
             }
     
     def _execute_action(self, action: str, context: Dict) -> Dict:
-        """액션 실행"""
+        """[EMOJI] [EMOJI]"""
         
         if action == "alert_manager":
             # High risk → Send alert to manager
@@ -316,8 +317,8 @@ class WorkflowEngine:
             return {'status': 'unknown_action'}
     
     def _send_alert_to_manager(self, context: Dict) -> Dict:
-        """고위험 포트폴리오 - 매니저에게 알림"""
-        logger.warning("⚠️ HIGH RISK ALERT - Notifying manager")
+        """[EMOJI] [EMOJI] - [EMOJI] [EMOJI]"""
+        logger.warning("[WARNING] HIGH RISK ALERT - Notifying manager")
         
         risk = context['risk_analysis']
         
@@ -336,8 +337,8 @@ class WorkflowEngine:
         return alert_message
     
     def _notify_user(self, context: Dict) -> Dict:
-        """중위험 포트폴리오 - 사용자에게 알림"""
-        logger.info("📊 MEDIUM RISK - Notifying user")
+        """[EMOJI] [EMOJI] - [EMOJI] [EMOJI]"""
+        logger.info("[INFO] MEDIUM RISK - Notifying user")
         
         risk = context['risk_analysis']
         
@@ -352,8 +353,8 @@ class WorkflowEngine:
         return notification
     
     def _auto_approve(self, context: Dict) -> Dict:
-        """저위험 포트폴리오 - 자동 승인"""
-        logger.info("✅ LOW RISK - Auto approved")
+        """[EMOJI] [EMOJI] - [EMOJI] [EMOJI]"""
+        logger.info("[SUCCESS] LOW RISK - Auto approved")
         
         return {
             'type': 'auto_approval',
@@ -364,7 +365,7 @@ class WorkflowEngine:
         }
     
     def get_workflow_status(self, workflow_id: str) -> Dict:
-        """워크플로우 상태 조회"""
+        """[EMOJI] [EMOJI] [EMOJI]"""
         if workflow_id not in self.workflows:
             return {'error': 'Workflow not found'}
         
@@ -376,7 +377,7 @@ workflow_engine = WorkflowEngine()
 
 
 def create_portfolio_agent() -> AIAgent:
-    """포트폴리오 최적화를 위한 AI Agent 생성"""
+    """[EMOJI] [EMOJI] [EMOJI] AI Agent [EMOJI]"""
     agent = AIAgent(name="Portfolio Optimization Agent")
     
     # Add tools (like in the diagram)

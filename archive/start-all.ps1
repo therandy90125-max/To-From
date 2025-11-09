@@ -13,6 +13,39 @@ if (-not $scriptPath) {
 Write-Host "프로젝트 경로: $scriptPath" -ForegroundColor Gray
 Write-Host ""
 
+# 포트 충돌 확인 및 정리
+Write-Host "🔍 포트 충돌 확인 중..." -ForegroundColor Yellow
+
+# 포트 8080 확인
+$port8080 = Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue
+if ($port8080) {
+    $pid = $port8080.OwningProcess
+    Write-Host "  ⚠️  포트 8080 사용 중 (PID: $pid), 종료 중..." -ForegroundColor Yellow
+    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
+# 포트 5000 확인
+$port5000 = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue
+if ($port5000) {
+    $pid = $port5000.OwningProcess
+    Write-Host "  ⚠️  포트 5000 사용 중 (PID: $pid), 종료 중..." -ForegroundColor Yellow
+    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
+# 포트 5173 확인
+$port5173 = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue
+if ($port5173) {
+    $pid = $port5173.OwningProcess
+    Write-Host "  ⚠️  포트 5173 사용 중 (PID: $pid), 종료 중..." -ForegroundColor Yellow
+    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
+Write-Host "  ✅ 포트 정리 완료" -ForegroundColor Green
+Write-Host ""
+
 # 1. Flask Backend 시작
 Write-Host "`n📦 Flask Backend 시작 (Port 5000)..." -ForegroundColor Yellow
 $flaskPath = Join-Path $scriptPath "python-backend"

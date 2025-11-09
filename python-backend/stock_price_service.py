@@ -1,9 +1,9 @@
 """
 Real-time stock price fetching service
-실시간 주가 조회 서비스
+[EMOJI] [EMOJI] [EMOJI] [EMOJI]
 
 Supports US (NYSE/NASDAQ) and Korean (KOSPI/KOSDAQ) markets
-미국 (NYSE/NASDAQ) 및 한국 (KOSPI/KOSDAQ) 시장 지원
+[EMOJI] (NYSE/NASDAQ) [EMOJI] [EMOJI] (KOSPI/KOSDAQ) [EMOJI] [EMOJI]
 """
 
 import yfinance as yf
@@ -17,25 +17,25 @@ logger = logging.getLogger(__name__)
 class StockPriceService:
     """
     Fetches real-time stock prices using yfinance
-    yfinance를 사용한 실시간 주가 조회
+    yfinance[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
     
     Handles both US and Korean markets automatically
-    미국 및 한국 시장 자동 처리
+    [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
     """
     
     @staticmethod
     def get_stock_info(symbol: str) -> Optional[Dict]:
         """
         Fetch comprehensive stock information
-        종합 주식 정보 조회
+        [EMOJI] [EMOJI] [EMOJI] [EMOJI]
         
         Args:
             symbol: Stock symbol (e.g., "AAPL", "005930.KS")
-                   주식 심볼 (예: "AAPL", "005930.KS")
+                   [EMOJI] [EMOJI] ([EMOJI]: "AAPL", "005930.KS")
             
         Returns:
             Dictionary with stock info or None if failed
-            주식 정보 딕셔너리 또는 실패 시 None
+            [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI] None
             
             {
                 "symbol": "AAPL",
@@ -103,7 +103,7 @@ class StockPriceService:
     def _normalize_symbol(symbol: str) -> str:
         """
         Normalize Korean stock symbols
-        한국 주식 심볼 정규화
+        [EMOJI] [EMOJI] [EMOJI] [EMOJI]
         
         Examples:
             '005930' -> '005930.KS'
@@ -119,7 +119,7 @@ class StockPriceService:
     def _detect_market(symbol: str, info: Dict) -> str:
         """
         Detect market from symbol and info
-        심볼과 정보에서 시장 감지
+        [EMOJI] [EMOJI] [EMOJI] [EMOJI]
         """
         if symbol.endswith('.KS'):
             return 'KOSPI'
@@ -137,7 +137,7 @@ class StockPriceService:
     def _detect_currency(market: str) -> str:
         """
         Detect currency from market
-        시장에서 통화 감지
+        [EMOJI] [EMOJI] [EMOJI]
         """
         if 'KOS' in market:
             return 'KRW'
@@ -147,15 +147,15 @@ class StockPriceService:
     def get_batch_prices(symbols: List[str]) -> Dict[str, Dict]:
         """
         Fetch prices for multiple stocks (optimized)
-        여러 주식의 가격 조회 (최적화)
+        [EMOJI] [EMOJI] [EMOJI] [EMOJI] ([EMOJI])
         
         Args:
             symbols: List of stock symbols
-                    주식 심볼 리스트
+                    [EMOJI] [EMOJI] [EMOJI]
             
         Returns:
             Dictionary mapping symbol to price info
-            심볼을 가격 정보로 매핑하는 딕셔너리
+            [EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
         """
         results = {}
         
@@ -171,7 +171,7 @@ class StockPriceService:
 def create_price_endpoints(app):
     """
     Add stock price endpoints to existing Flask app
-    기존 Flask 앱에 주가 엔드포인트 추가
+    [EMOJI] Flask [EMOJI] [EMOJI] [EMOJI] [EMOJI]
     
     Usage in app.py:
         from stock_price_service import create_price_endpoints

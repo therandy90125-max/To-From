@@ -153,7 +153,7 @@ const EnhancedCharts = () => {
               <div className="mt-3 pt-3 border-t border-green-400">
                 <span className="text-xs opacity-75">{t('improvement')}: </span>
                 <span className="text-lg font-bold">
-                  +{(safeFormat(improvement.return_improvement, 4) * 100).toFixed(2)}%
+                  +{safeFormat(improvement.return_improvement, 4).toFixed(2)}%
                 </span>
               </div>
             )}
@@ -173,7 +173,7 @@ const EnhancedCharts = () => {
               <div className="mt-3 pt-3 border-t border-orange-400">
                 <span className="text-xs opacity-75">{t('change')}: </span>
                 <span className={`text-lg font-bold ${safeFormat(improvement.risk_change, 4) <= 0 ? 'text-white' : 'text-orange-200'}`}>
-                  {safeFormat(improvement.risk_change, 4) >= 0 ? '+' : ''}{(safeFormat(improvement.risk_change, 4) * 100).toFixed(2)}%
+                  {safeFormat(improvement.risk_change, 4) >= 0 ? '+' : ''}{safeFormat(improvement.risk_change, 4).toFixed(2)}%
                 </span>
               </div>
             )}
@@ -336,14 +336,14 @@ const EnhancedCharts = () => {
                 <div className="text-2xl mb-1">⭐</div>
                 <div className="text-xs text-gray-600 mb-1">{t('returnImprovement')}</div>
                 <div className="text-lg font-bold text-green-600">
-                  +{(improvement.return_improvement * 100).toFixed(2)}%
+                  +{improvement.return_improvement?.toFixed(2) || '0.00'}%
                 </div>
               </div>
               <div className="text-center p-4 bg-orange-50 rounded-lg">
                 <div className="text-2xl mb-1">🛡️</div>
                 <div className="text-xs text-gray-600 mb-1">{t('riskChange')}</div>
                 <div className={`text-lg font-bold ${improvement.risk_change <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
-                  {improvement.risk_change >= 0 ? '+' : ''}{(improvement.risk_change * 100).toFixed(2)}%
+                  {improvement.risk_change >= 0 ? '+' : ''}{improvement.risk_change?.toFixed(2) || '0.00'}%
                 </div>
               </div>
               <div className="text-center p-4 bg-purple-50 rounded-lg">
@@ -357,7 +357,7 @@ const EnhancedCharts = () => {
                 <div className="text-2xl mb-1">🎯</div>
                 <div className="text-xs text-gray-600 mb-1">{t('overallScore')}</div>
                 <div className="text-lg font-bold text-indigo-600">
-                  +{(improvement.score_improvement * 100).toFixed(2)}%
+                  +{improvement.score_improvement?.toFixed(2) || '0.00'}%
                 </div>
               </div>
             </div>

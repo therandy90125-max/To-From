@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Real-time Stock Data Fetcher
-실시간 주가 데이터 조회 (yfinance 사용)
+[EMOJI] [EMOJI] [EMOJI] [EMOJI] (yfinance [EMOJI])
 """
 
 import json
@@ -50,7 +50,7 @@ DEFAULT_USD_TO_KRW = 1300.0
 def get_exchange_rate() -> float:
     """
     Fetch real-time USD to KRW exchange rate
-    실시간 USD → KRW 환율 조회
+    [EMOJI] USD → KRW [EMOJI] [EMOJI]
     """
     try:
         response = requests.get('https://api.exchangerate-api.com/v4/latest/USD', timeout=3)
@@ -70,7 +70,7 @@ def get_exchange_rate() -> float:
 def normalize_korean_symbol(symbol: str) -> str:
     """
     Normalize Korean stock symbols
-    한국 주식 심볼 정규화
+    [EMOJI] [EMOJI] [EMOJI] [EMOJI]
     
     Examples:
         '005930' -> '005930.KS' (KOSPI)
@@ -86,7 +86,7 @@ def normalize_korean_symbol(symbol: str) -> str:
 def fetch_real_time_price(symbol: str) -> Dict:
     """
     Fetch real-time stock price using yfinance
-    yfinance를 사용한 실시간 주가 조회
+    yfinance[EMOJI] [EMOJI] [EMOJI] [EMOJI] [EMOJI]
     
     Args:
         symbol: Stock ticker symbol (e.g., 'AAPL', '005930.KS')
@@ -182,7 +182,7 @@ def fetch_real_time_price(symbol: str) -> Dict:
 def fetch_mock_price(symbol: str) -> Dict:
     """
     Fetch mock stock price for demo/fallback
-    데모/폴백용 Mock 주가 데이터
+    [EMOJI]/[EMOJI] Mock [EMOJI] [EMOJI]
     """
     symbol = normalize_korean_symbol(symbol)
     
@@ -246,7 +246,7 @@ def fetch_mock_price(symbol: str) -> Dict:
 def get_stock_price(symbol: str) -> Dict:
     """
     Get stock price - tries real data first, falls back to mock
-    주가 조회 - 실시간 데이터 우선, 실패 시 Mock 사용
+    [EMOJI] [EMOJI] - [EMOJI] [EMOJI] [EMOJI], [EMOJI] [EMOJI] Mock [EMOJI]
     """
     # Try real data first if yfinance is available
     if YFINANCE_AVAILABLE:

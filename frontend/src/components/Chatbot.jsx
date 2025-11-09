@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useLanguage } from "../contexts/LanguageContext";
 import axios from "axios";
 
-export default function Chatbot() {
+export default function Chatbot({ embedded = false }) {
   const { t } = useLanguage();
   const [messages, setMessages] = useState([
     {
@@ -81,13 +81,18 @@ export default function Chatbot() {
     setInput(question);
   };
 
-  return (
-    <div className="page-content">
-      <h2 className="text-2xl font-bold mb-6">{t('chatbot')}</h2>
+  const containerClass = embedded ? 'chatbot-embedded' : 'page-content';
+  const panelClass = embedded
+    ? 'chatbot-panel'
+    : 'bg-white rounded-lg shadow-lg h-[600px] flex flex-col';
 
-      <div className="bg-white rounded-lg shadow-lg h-[600px] flex flex-col">
+  return (
+    <div className={containerClass}>
+      {!embedded && <h2 className="text-2xl font-bold mb-6">{t('chatbot')}</h2>}
+
+      <div className={panelClass}>
         {/* 메시지 영역 */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="chatbot-messages">
           {messages.map((msg, idx) => (
             <div
               key={idx}
@@ -110,9 +115,9 @@ export default function Chatbot() {
             <div className="flex justify-start">
               <div className="bg-gray-200 rounded-lg p-3">
                 <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+                  <div className="chatbot-typing-dot"></div>
+                  <div className="chatbot-typing-dot" style={{ animationDelay: "0.2s" }}></div>
+                  <div className="chatbot-typing-dot" style={{ animationDelay: "0.4s" }}></div>
                 </div>
               </div>
             </div>
@@ -121,7 +126,7 @@ export default function Chatbot() {
         </div>
 
         {/* 빠른 질문 */}
-        {messages.length === 1 && (
+        {!embedded && messages.length === 1 && (
           <div className="px-4 py-2 border-t">
             <p className="text-sm text-gray-600 mb-2">{t('quickQuestions')}:</p>
             <div className="flex flex-wrap gap-2">
@@ -139,25 +144,23 @@ export default function Chatbot() {
         )}
 
         {/* 입력 영역 */}
-        <div className="border-t p-4">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={t('typeMessage')}
-              className="flex-1 border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-            <button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {t('send')}
-            </button>
-          </div>
+        <div className="chatbot-input-bar">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={t('typeMessage')}
+            className="chatbot-input-field"
+            disabled={loading}
+          />
+          <button
+            onClick={handleSend}
+            disabled={loading || !input.trim()}
+            className="chatbot-send-btn"
+          >
+            {t('send')}
+          </button>
         </div>
       </div>
     </div>

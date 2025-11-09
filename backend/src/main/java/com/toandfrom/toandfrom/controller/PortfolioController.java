@@ -143,6 +143,13 @@ public class PortfolioController {
     @PostMapping("/optimize/with-weights")
     public ResponseEntity<Map<String, Object>> optimizeWithWeights(@RequestBody PortfolioRequest request) {
         try {
+            // 📦 디버깅: 받은 요청 데이터 확인
+            System.out.println("📦 Spring Boot Received:");
+            if (request != null) {
+                System.out.println("   → tickers: " + request.getTickers() + " (개수: " + (request.getTickers() != null ? request.getTickers().size() : 0) + ")");
+                System.out.println("   → initialWeights: " + request.getInitialWeights() + " (개수: " + (request.getInitialWeights() != null ? request.getInitialWeights().size() : 0) + ")");
+            }
+            
             // Request validation
             if (request == null || request.getTickers() == null || request.getTickers().isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -153,6 +160,7 @@ public class PortfolioController {
             
             if (request.getInitialWeights() == null || 
                 request.getInitialWeights().size() != request.getTickers().size()) {
+                System.out.println("❌ Validation Error: tickers=" + request.getTickers().size() + ", weights=" + (request.getInitialWeights() != null ? request.getInitialWeights().size() : 0));
                 return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "error", "initialWeights의 개수가 tickers와 일치해야 합니다."

@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLanguage } from '../contexts/LanguageContext';
 import { getCurrencySymbol, getCurrencyCode } from '../utils/currencyUtils';
-import { apiClient, API_ENDPOINTS, checkBackendHealth } from '../config/api';
+import { checkBackendHealth } from '../config/api';
+import { optimizePortfolioWithWeights } from '../api/portfolioApi';
 import LanguageSwitcher from './LanguageSwitcher';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
@@ -24,9 +25,8 @@ export default function PortfolioOptimizer() {
   const [period, setPeriod] = useState('1y');
   
   // Results
-  const [classicalResult, setClassicalResult] = useState(null);
   const [quantumResult, setQuantumResult] = useState(null);
-  const [loading, setLoading] = useState({ classical: false, quantum: false });
+  const [loading, setLoading] = useState({ quantum: false });
   const [error, setError] = useState(null);
   const [showComparison, setShowComparison] = useState(false);
   const [backendConnected, setBackendConnected] = useState(false);
@@ -53,11 +53,15 @@ export default function PortfolioOptimizer() {
         setBackendConnected(isHealthy);
         
         if (!isHealthy) {
-          setError(
-            language === 'ko' 
-              ? '⚠️ 백엔드 서버에 연결할 수 없습니다. start-all.bat을 실행했는지 확인하세요.'
-              : '⚠️ Cannot connect to backend server. Please check if start-all.bat is running.'
-          );
+          const errorMessage = language === 'ko' 
+            ? '⚠️ 백엔드 서버에 연결할 수 없습니다.\n\n해결 방법:\n1. PowerShell에서 .\\start-dev.ps1 실행\n2. 또는 백엔드 디렉토리에서 .\\mvnw.cmd spring-boot:run 실행\n3. 브라우저 콘솔(F12)에서 상세 오류 확인'
+            : '⚠️ Cannot connect to backend server.\n\nSolutions:\n1. Run .\\start-dev.ps1 in PowerShell\n2. Or run .\\mvnw.cmd spring-boot:run in backend directory\n3. Check browser console (F12) for detailed errors';
+          setError(errorMessage);
+          
+          // 콘솔에 상세 정보 출력
+          console.error('❌ Backend connection failed');
+          console.error('📍 Backend URL:', import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080');
+          console.error('💡 서버가 실행 중인지 확인하세요.');
         } else {
           // 연결 성공 시 에러 메시지 제거
           setError(null);
@@ -76,69 +80,102 @@ export default function PortfolioOptimizer() {
     return () => clearInterval(interval);
   }, [language]);
 
-  // Run optimization
-  const runOptimization = async (method) => {
+  // Run quantum optimization only
+  const runOptimization = async () => {
     if (!originalPortfolio || originalPortfolio.length < 2) {
       setError(t('needAtLeast2Stocks'));
       return;
     }
 
-    setLoading(prev => ({ ...prev, [method]: true }));
+    setLoading(prev => ({ ...prev, quantum: true }));
     setError(null);
 
     try {
       // Prepare data
       const tickers = originalPortfolio.map(s => s.ticker);
       const totalShares = originalPortfolio.reduce((sum, s) => sum + s.shares, 0);
+      
+      if (totalShares === 0) {
+        setError(t('totalSharesZero'));
+        setLoading(prev => ({ ...prev, quantum: false }));
+        return;
+      }
+      
       const initialWeights = originalPortfolio.map(s => s.shares / totalShares);
 
-      const response = await apiClient.post(API_ENDPOINTS.OPTIMIZE_WITH_WEIGHTS, {
+      // ✅ 검증: tickers와 initial_weights 개수 일치 확인
+      if (tickers.length !== initialWeights.length) {
+        console.error('❌ Validation Error:', {
+          tickers,
+          tickersCount: tickers.length,
+          initialWeights,
+          weightsCount: initialWeights.length
+        });
+        setError(`Error: Tickers count (${tickers.length}) doesn't match weights count (${initialWeights.length}).`);
+        setLoading(prev => ({ ...prev, quantum: false }));
+        return;
+      }
+
+      // ✅ 디버깅: 전송 전 데이터 확인
+      console.log('📤 Sending to API:', {
         tickers,
+        tickersCount: tickers.length,
         initial_weights: initialWeights,
-        risk_factor: riskFactor,
-        method,
-        period,
-        reps: 5,
-        auto_save: false
-      }, {
-        timeout: method === 'quantum' ? 300000 : 60000
+        weightsCount: initialWeights.length
       });
 
-      if (response.data.success) {
-        const result = response.data.result;
+      // portfolioApi.js의 optimizePortfolioWithWeights 사용 (Flask 직접 호출)
+      const response = await optimizePortfolioWithWeights({
+        tickers,
+        initialWeights: initialWeights,
+        riskFactor: riskFactor,
+        method: 'quantum',  // Only quantum optimization
+        period,
+        reps: 1,  // Fast execution (10-15 seconds)
+        precision: 4,
+        auto_save: false
+      });
+
+      // Flask 직접 호출은 success 필드가 없을 수 있으므로 result 직접 확인
+      const result = response.result || response;
+      
+      if (response.success !== false && result) {
         
-        // Parse result data safely
+        // Parse result data safely - Backend returns {original: {...}, optimized: {...}, improvements: {...}}
+        const originalData = result.original || {};
+        const optimizedData = result.optimized || {};
+        const improvementsData = result.improvements || {};
+        
         const parsedResult = {
-          selected_tickers: result.selected_tickers || tickers,
-          optimized_weights: Array.isArray(result.optimized_weights) 
-            ? result.optimized_weights 
-            : (typeof result.optimized_weights === 'string' 
-                ? result.optimized_weights.split(' ').map(Number)
-                : result.weights || initialWeights),
-          optimized_metrics: result.optimized_metrics || result.optimized || {
-            expected_return: result.expected_return || 0,
-            risk: result.risk || 0,
-            sharpe_ratio: result.sharpe_ratio || 0
+          selected_tickers: optimizedData.tickers || result.selected_tickers || tickers,
+          optimized_weights: Array.isArray(optimizedData.weights) 
+            ? optimizedData.weights 
+            : (Array.isArray(result.optimized_weights)
+                ? result.optimized_weights
+                : (typeof result.optimized_weights === 'string' 
+                    ? result.optimized_weights.split(' ').map(Number)
+                    : result.weights || initialWeights)),
+          optimized_metrics: {
+            expected_return: optimizedData.expected_return || result.expected_return || 0,
+            risk: optimizedData.risk || result.risk || 0,
+            sharpe_ratio: optimizedData.sharpe_ratio || result.sharpe_ratio || 0
           },
-          original_metrics: result.original_metrics || result.original || {
-            expected_return: 0,
-            risk: 0,
-            sharpe_ratio: 0
+          original_metrics: {
+            expected_return: originalData.expected_return || 0,
+            risk: originalData.risk || 0,
+            sharpe_ratio: originalData.sharpe_ratio || 0
           },
-          improvement: result.improvement || result.improvements || {
+          improvement: improvementsData || result.improvement || result.improvements || {
             return_improvement: 0,
             risk_change: 0,
             sharpe_improvement: 0
           },
-          method: result.method || method,
-          quantum_verified: result.quantum_verified || false
+          method: result.method || 'quantum',
+          quantum_verified: result.quantum_verified !== false,
+          quantum: result.quantum || {}
         };
         
-        if (method === 'classical') {
-          setClassicalResult(parsedResult);
-        } else {
-          setQuantumResult(parsedResult);
-        }
+        setQuantumResult(parsedResult);
         
         // Save to localStorage for Analytics
         localStorage.setItem('lastOptimizationResult', JSON.stringify({
@@ -158,25 +195,49 @@ export default function PortfolioOptimizer() {
             selected_tickers: parsedResult.selected_tickers
           },
           improvement: parsedResult.improvement,
-          method,
+          method: parsedResult.method || 'quantum',
           timestamp: new Date().toISOString()
         }));
       } else {
-        setError(response.data.error || 'Optimization failed');
+        setError(response.error || response.message || 'Optimization failed');
       }
     } catch (err) {
       console.error('Optimization error:', err);
-      setError(err.response?.data?.error || err.message || 'Optimization request failed');
+      
+      // 더 상세한 에러 메시지
+      let errorMessage = 'Optimization request failed';
+      
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        errorMessage = language === 'ko' 
+          ? '요청 시간 초과: Flask 서버 응답이 너무 느립니다. Flask 서버가 실행 중인지 확인하세요.'
+          : 'Request timeout: Flask server response is too slow. Please check if Flask server is running.';
+      } else if (err.message?.includes('Network Error') || err.message?.includes('ERR_CONNECTION_REFUSED')) {
+        errorMessage = language === 'ko'
+          ? '네트워크 오류: Flask 서버에 연결할 수 없습니다. Flask 서버가 http://localhost:5000 에서 실행 중인지 확인하세요.'
+          : 'Network error: Cannot connect to Flask server. Please check if Flask server is running at http://localhost:5000';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      
+      // 콘솔에 상세 정보 출력
+      console.error('❌ Optimization failed details:');
+      console.error('   Error:', err);
+      console.error('   Response:', err.response);
+      console.error('   Message:', err.message);
+      console.error('💡 Flask 서버 확인: http://localhost:5000/api/health');
     } finally {
-      setLoading(prev => ({ ...prev, [method]: false }));
+      setLoading(prev => ({ ...prev, quantum: false }));
     }
   };
 
-  // Run both optimizations for comparison
-  const runComparison = async () => {
+  // Run quantum optimization only (기존 포트폴리오 vs 양자 최적화)
+  const runQuantumOptimization = async () => {
     setShowComparison(true);
-    await runOptimization('classical');
-    await runOptimization('quantum');
+    await runOptimization();
   };
 
   // Navigate to Analytics
@@ -221,6 +282,8 @@ export default function PortfolioOptimizer() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
+        {loading.quantum && <OptimizationProgressOverlay language={language} />}
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
@@ -229,7 +292,7 @@ export default function PortfolioOptimizer() {
                 🎯 {t('portfolioOptimization')}
               </h1>
               <p className="text-gray-600">
-                {t('quantumVsClassicalComparison')}
+                {language === 'ko' ? '양자 알고리즘으로 포트폴리오를 최적화합니다' : 'Optimize portfolio with quantum algorithm'}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -336,31 +399,23 @@ export default function PortfolioOptimizer() {
 
           {/* Right Column: Optimization Results */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Action Buttons */}
+            {/* Action Button - 양자 최적화만 */}
             <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">
+                  {language === 'ko' ? '🔬 양자 포트폴리오 최적화' : '🔬 Quantum Portfolio Optimization'}
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {language === 'ko' 
+                    ? '기존 포트폴리오와 양자 알고리즘으로 최적화된 포트폴리오를 비교합니다.'
+                    : 'Compare your original portfolio with quantum-optimized portfolio.'}
+                </p>
                 <button
-                  onClick={() => runOptimization('classical')}
-                  disabled={loading.classical}
-                  className="px-6 py-4 bg-blue-500 text-white rounded-xl font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading.classical ? '⏳ ' + t('optimizing') : '⚡ ' + t('runClassical')}
-                </button>
-                
-                <button
-                  onClick={() => runOptimization('quantum')}
+                  onClick={runQuantumOptimization}
                   disabled={loading.quantum}
-                  className="px-6 py-4 bg-purple-500 text-white rounded-xl font-semibold hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-8 py-4 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl font-bold text-lg hover:from-purple-600 hover:to-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                 >
-                  {loading.quantum ? '⏳ ' + t('optimizing') : '🔬 ' + t('runQuantum')}
-                </button>
-                
-                <button
-                  onClick={runComparison}
-                  disabled={loading.classical || loading.quantum}
-                  className="px-6 py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {(loading.classical || loading.quantum) ? '⏳ ' + t('optimizing') : '🆚 ' + t('runComparison')}
+                  {loading.quantum ? '⏳ ' + t('optimizing') : '🚀 ' + (language === 'ko' ? '양자 최적화 실행' : 'Run Quantum Optimization')}
                 </button>
               </div>
             </div>
@@ -368,74 +423,59 @@ export default function PortfolioOptimizer() {
             {/* Error Display */}
             {error && (
               <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 text-red-700">
-                <h3 className="font-semibold mb-1">❌ {t('error')}</h3>
-                <p className="text-sm">{error}</p>
-              </div>
-            )}
-
-            {/* Classical Result */}
-            {classicalResult && (
-              <div className="bg-white rounded-2xl shadow-lg p-6 border-l-4 border-blue-500">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">
-                  ⚡ {t('classicalOptimization')} {t('result')}
-                </h3>
-                <OptimizationResultCard result={classicalResult} currencySymbol={currencySymbol} t={t} color="blue" />
-              </div>
-            )}
-
-            {/* Quantum Result */}
-            {quantumResult && (
-              <div className="bg-white rounded-2xl shadow-lg p-6 border-l-4 border-purple-500">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">
-                  🔬 {t('quantumOptimization')} {t('result')}
-                </h3>
-                <OptimizationResultCard result={quantumResult} currencySymbol={currencySymbol} t={t} color="purple" />
-              </div>
-            )}
-
-            {/* Comparison View */}
-            {classicalResult && quantumResult && showComparison && (
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-lg p-6 border-2 border-indigo-200">
-                <h3 className="text-2xl font-bold text-gray-900 mb-6">
-                  🆚 {t('quantumVsClassical')}
-                </h3>
-                
-                {/* Comparison Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <MetricComparisonCard
-                    title={t('expectedReturnLabel')}
-                    classical={classicalResult.optimized_metrics.expected_return * 100}
-                    quantum={quantumResult.optimized_metrics.expected_return * 100}
-                    format={(v) => `${v.toFixed(2)}%`}
-                    higherIsBetter={true}
-                  />
-                  <MetricComparisonCard
-                    title={t('riskLabel')}
-                    classical={classicalResult.optimized_metrics.risk * 100}
-                    quantum={quantumResult.optimized_metrics.risk * 100}
-                    format={(v) => `${v.toFixed(2)}%`}
-                    higherIsBetter={false}
-                  />
-                  <MetricComparisonCard
-                    title={t('sharpeRatioLabel')}
-                    classical={classicalResult.optimized_metrics.sharpe_ratio}
-                    quantum={quantumResult.optimized_metrics.sharpe_ratio}
-                    format={(v) => v.toFixed(3)}
-                    higherIsBetter={true}
-                  />
+                <h3 className="font-semibold mb-2">❌ {t('error')}</h3>
+                <p className="text-sm whitespace-pre-line">{error}</p>
+                <div className="mt-3 text-xs text-red-600">
+                  <p className="font-semibold">{language === 'ko' ? '추가 정보:' : 'Additional Info:'}</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>{language === 'ko' ? '브라우저 개발자 도구(F12) → Console 탭에서 상세 오류 확인' : 'Open browser DevTools (F12) → Console tab for detailed errors'}</li>
+                    <li>{language === 'ko' ? '백엔드 서버가 http://localhost:8080 에서 실행 중인지 확인' : 'Verify backend server is running at http://localhost:8080'}</li>
+                    <li>{language === 'ko' ? '포트 충돌이 있는지 확인 (다른 프로그램이 8080 포트 사용 중일 수 있음)' : 'Check for port conflicts (another program may be using port 8080)'}</li>
+                  </ul>
                 </div>
-
-                {/* View Detailed Analytics Button */}
-                <button
-                  onClick={goToAnalytics}
-                  className="w-full px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:from-indigo-700 hover:to-purple-700 transition-colors"
-                >
-                  📊 {t('viewDetailedAnalytics')} →
-                </button>
               </div>
+            )}
+
+            {/* 기존 포트폴리오 vs 양자 최적화 비교 */}
+            {quantumResult && showComparison && (
+              <OriginalVsQuantumView
+                originalPortfolio={originalPortfolio}
+                quantumResult={quantumResult}
+                currencySymbol={currencySymbol}
+                t={t}
+                language={language}
+                goToAnalytics={goToAnalytics}
+              />
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function OptimizationProgressOverlay({ language }) {
+  const header = language === 'ko' ? '양자 최적화 실행 중...' : 'Running Quantum Optimization...';
+  const subtitle =
+    language === 'ko'
+      ? '처리중입니다. 잠시만 기다려 주세요.'
+      : 'This may take a few seconds. Please be patient.';
+  const tips =
+    language === 'ko'
+      ? ['데이터를 정규화하는 중...', 'QAOA 회로를 탐색하는 중...', '결과를 정밀 검증 중...']
+      : ['Normalizing data grid...', 'Exploring QAOA circuit space...', 'Verifying portfolio metrics...'];
+
+  return (
+    <div className="optimization-overlay">
+      <div className="optimization-overlay-card">
+        <div className="quantum-pulse" />
+        <h3>{header}</h3>
+        <p>{subtitle}</p>
+        <ul>
+          {tips.map((line, index) => (
+            <li key={index}>{line}</li>
+          ))}
+        </ul>
       </div>
     </div>
   );
@@ -445,6 +485,9 @@ export default function PortfolioOptimizer() {
 function OptimizationResultCard({ result, currencySymbol, t, color }) {
   const metrics = result.optimized_metrics || {};
   const improvement = result.improvement || {};
+  const quantumNote = result.quantum?.note;
+  const quantumStatus = result.quantum?.status;
+  const verified = result.quantum_verified !== false;
   
   // Safe number formatting
   const safeFormat = (value, decimals = 2) => {
@@ -461,7 +504,7 @@ function OptimizationResultCard({ result, currencySymbol, t, color }) {
           <div className="text-lg font-bold text-gray-900">{safeFormat((metrics.expected_return || 0) * 100, 2)}%</div>
           {improvement && !isNaN(improvement.return_improvement) && (
             <div className={`text-xs ${improvement.return_improvement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {improvement.return_improvement >= 0 ? '+' : ''}{safeFormat(improvement.return_improvement * 100, 2)}%
+              {improvement.return_improvement >= 0 ? '+' : ''}{safeFormat(improvement.return_improvement, 2)}%
             </div>
           )}
         </div>
@@ -470,7 +513,7 @@ function OptimizationResultCard({ result, currencySymbol, t, color }) {
           <div className="text-lg font-bold text-gray-900">{safeFormat((metrics.risk || 0) * 100, 2)}%</div>
           {improvement && !isNaN(improvement.risk_change) && (
             <div className={`text-xs ${improvement.risk_change <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {improvement.risk_change >= 0 ? '+' : ''}{safeFormat(improvement.risk_change * 100, 2)}%
+              {improvement.risk_change >= 0 ? '+' : ''}{safeFormat(improvement.risk_change, 2)}%
             </div>
           )}
         </div>
@@ -499,34 +542,307 @@ function OptimizationResultCard({ result, currencySymbol, t, color }) {
           ))}
         </div>
       </div>
+
+      {!verified && quantumNote && (
+        <div className="quantum-fallback-note">
+          {quantumNote}
+          {quantumStatus && (
+            <span className="block text-xs opacity-70 mt-1">({quantumStatus})</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// Metric Comparison Card Component
-function MetricComparisonCard({ title, classical, quantum, format, higherIsBetter }) {
-  const winner = higherIsBetter ? (quantum > classical ? 'quantum' : 'classical') : (quantum < classical ? 'quantum' : 'classical');
-  
+// 기존 포트폴리오 vs 양자 최적화 비교 뷰
+function OriginalVsQuantumView({ originalPortfolio, quantumResult, currencySymbol, t, language, goToAnalytics }) {
+  const quantumVerified = quantumResult.quantum_verified !== false;
+  const quantumStatus = quantumResult.quantum?.status || '';
+  const quantumNote = quantumResult.quantum?.note || '';
+
+  const tickerNameMap = useMemo(() => {
+    const map = {};
+
+    (originalPortfolio || []).forEach((stock) => {
+      if (!stock?.ticker) {
+        return;
+      }
+      map[stock.ticker] = stock.name;
+      const shortTicker = stock.ticker.split('.')[0];
+      map[shortTicker] = stock.name;
+    });
+
+    const assetNames = quantumResult?.asset_names || quantumResult?.selected_assets;
+    if (Array.isArray(assetNames)) {
+      (quantumResult?.selected_tickers || []).forEach((ticker, idx) => {
+        if (!ticker) return;
+        const name = assetNames[idx];
+        if (name) {
+          map[ticker] = name;
+          map[ticker.split('.')[0]] = name;
+        }
+      });
+    }
+
+    return map;
+  }, [originalPortfolio, quantumResult]);
+
+  const getDisplayName = (ticker) => {
+    if (!ticker) return '';
+    const shortTicker = ticker.split('.')[0];
+    const candidate = tickerNameMap[ticker] || tickerNameMap[shortTicker];
+    if (!candidate) {
+      return shortTicker;
+    }
+    return candidate.split('(')[0].trim();
+  };
+
+  const totalShares = (originalPortfolio || []).reduce((sum, stock) => sum + (stock?.shares || 0), 0);
+
+  const originalDistribution = (originalPortfolio || [])
+    .map((stock) => ({
+      name: getDisplayName(stock.ticker),
+      ticker: stock.ticker,
+      value: totalShares > 0 ? (stock.shares / totalShares) * 100 : 0,
+      shares: stock.shares,
+    }))
+    .filter((item) => item.value > 0);
+
+  const quantumDistribution = (quantumResult?.selected_tickers || [])
+    .map((ticker, idx) => ({
+      name: getDisplayName(ticker),
+      ticker,
+      value: ((quantumResult?.optimized_weights || [])[idx] || 0) * 100,
+    }))
+    .filter((item) => item.value > 0);
+
+  // Comparison metrics
+  const originalMetrics = quantumResult.original_metrics || {};
+  const quantumMetrics = quantumResult.optimized_metrics || {};
+  const improvement = quantumResult.improvement || {};
+
+  const comparisonData = [
+    {
+      name: language === 'ko' ? '예상 수익률' : 'Expected Return',
+      original: (originalMetrics.expected_return || 0) * 100,
+      quantum: (quantumMetrics.expected_return || 0) * 100,
+    },
+    {
+      name: language === 'ko' ? '위험도' : 'Risk',
+      original: (originalMetrics.risk || 0) * 100,
+      quantum: (quantumMetrics.risk || 0) * 100,
+    },
+    {
+      name: language === 'ko' ? '샤프 비율' : 'Sharpe Ratio',
+      original: originalMetrics.sharpe_ratio || 0,
+      quantum: quantumMetrics.sharpe_ratio || 0,
+    },
+  ];
+
   return (
-    <div className="bg-white rounded-lg p-4 shadow">
-      <div className="text-xs text-gray-600 mb-2">{title}</div>
-      <div className="space-y-2">
-        <div className={`flex items-center justify-between p-2 rounded ${winner === 'classical' ? 'bg-blue-100' : 'bg-gray-50'}`}>
-          <span className="text-xs font-medium text-gray-700">Classical</span>
-          <span className="text-sm font-bold text-blue-600">{format(classical)}</span>
-        </div>
-        <div className={`flex items-center justify-between p-2 rounded ${winner === 'quantum' ? 'bg-purple-100' : 'bg-gray-50'}`}>
-          <span className="text-xs font-medium text-gray-700">Quantum</span>
-          <span className="text-sm font-bold text-purple-600">{format(quantum)}</span>
-        </div>
-      </div>
-      {winner === 'quantum' && (
-        <div className="mt-2 text-center">
-          <span className="inline-block px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded">
-            ⭐ Quantum Wins
-          </span>
+    <div className="space-y-6">
+      {!quantumVerified && (
+        <div className="quantum-fallback-banner">
+          <div>
+            <strong>{t('quantumFallbackTitle')}</strong>
+            <span className="block text-sm">
+              {language === 'ko' ? t('quantumFallbackDescription') : t('quantumFallbackDescription')}
+            </span>
+            {quantumNote && (
+              <span className="block text-xs opacity-80 mt-1">{quantumNote}</span>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Header */}
+      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-lg p-6 border-2 border-indigo-200">
+        <h3 className="text-2xl font-bold text-gray-900 mb-2 text-center">
+          {language === 'ko' ? '📊 기존 포트폴리오 vs 양자 최적화' : '📊 Original vs Quantum Optimization'}
+        </h3>
+        <p className="text-gray-600 text-center">
+          {language === 'ko' ? '양자 알고리즘으로 최적화된 포트폴리오와 비교' : 'Compare with quantum-optimized portfolio'}
+        </p>
+      </div>
+
+      {/* Side-by-side Pie Charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Original Portfolio */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 border-l-4 border-red-500">
+          <h3 className="text-xl font-bold mb-4 text-center">
+            {language === 'ko' ? '📂 기존 포트폴리오' : '📂 Original Portfolio'}
+          </h3>
+          {originalDistribution.length > 0 && (
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={originalDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, ticker, value }) => `${name} (${ticker})\n${value.toFixed(1)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {originalDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS.original[index % COLORS.original.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, _label, entry) => [
+                    `${Number(value).toFixed(2)}%`,
+                    getDisplayName(entry?.payload?.ticker)
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+          {originalDistribution.length > 0 && (
+            <div className="chart-legend">
+              {originalDistribution.map((item, index) => (
+                <div key={item.ticker} className="legend-row">
+                  <span
+                    className="bullet"
+                    style={{ backgroundColor: COLORS.original[index % COLORS.original.length] }}
+                  />
+                  <span className="legend-name">
+                    {item.ticker} · {item.name}
+                  </span>
+                  <span className="legend-value">
+                    {item.value.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Quantum Optimized */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 border-l-4 border-purple-500">
+          <h3 className="text-xl font-bold mb-4 text-center">
+            {language === 'ko' ? '🔬 양자 최적화' : '🔬 Quantum Optimized'}
+          </h3>
+          {quantumDistribution.length > 0 && (
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={quantumDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, ticker, value }) => `${name} (${ticker})\n${value.toFixed(1)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {quantumDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS.optimized[index % COLORS.optimized.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, _label, entry) => [
+                    `${Number(value).toFixed(2)}%`,
+                    getDisplayName(entry?.payload?.ticker)
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+          {quantumDistribution.length > 0 && (
+            <div className="chart-legend">
+              {quantumDistribution.map((item, index) => (
+                <div key={item.ticker} className="legend-row">
+                  <span
+                    className="bullet"
+                    style={{ backgroundColor: COLORS.optimized[index % COLORS.optimized.length] }}
+                  />
+                  <span className="legend-name">
+                    {item.ticker} · {item.name}
+                  </span>
+                  <span className="legend-value">
+                    {item.value.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Metrics Comparison */}
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <h3 className="text-xl font-bold mb-6 text-center">
+          {language === 'ko' ? '📈 성과 비교' : '📈 Performance Comparison'}
+        </h3>
+
+        {/* Bar Chart */}
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={comparisonData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="original" fill="#FF6B6B" name={language === 'ko' ? '기존' : 'Original'} />
+            <Bar dataKey="quantum" fill="#6C5CE7" name={language === 'ko' ? '양자 최적화' : 'Quantum'} />
+          </BarChart>
+        </ResponsiveContainer>
+
+        {/* Improvement Summary */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {comparisonData.map((metric, idx) => {
+            const isReturnOrSharpe = idx === 0 || idx === 2;
+            const quantumBetter = isReturnOrSharpe
+              ? metric.quantum > metric.original
+              : metric.quantum < metric.original;
+            const improvement = isReturnOrSharpe
+              ? ((metric.quantum - metric.original) / Math.abs(metric.original || 1)) * 100
+              : ((metric.original - metric.quantum) / Math.abs(metric.original || 1)) * 100;
+
+            return (
+              <div
+                key={idx}
+                className={`p-4 rounded-lg border-2 ${
+                  quantumBetter
+                    ? 'bg-green-50 border-green-500'
+                    : 'bg-gray-50 border-gray-300'
+                }`}
+              >
+                <div className="text-sm text-gray-600 mb-2">{metric.name}</div>
+                <div className="text-lg font-bold">
+                  {quantumBetter ? '✅ ' + (language === 'ko' ? '개선됨' : 'Improved') : '➡️ ' + (language === 'ko' ? '유사' : 'Similar')}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {idx === 2 ? (
+                    <>
+                      {language === 'ko' ? '기존' : 'Original'}: {metric.original.toFixed(3)} → {language === 'ko' ? '양자' : 'Quantum'}: {metric.quantum.toFixed(3)}
+                    </>
+                  ) : (
+                    <>
+                      {language === 'ko' ? '기존' : 'Original'}: {metric.original.toFixed(2)}% → {language === 'ko' ? '양자' : 'Quantum'}: {metric.quantum.toFixed(2)}%
+                    </>
+                  )}
+                </div>
+                {quantumBetter && (
+                  <div className="text-xs text-green-600 mt-1 font-semibold">
+                    {improvement > 0 ? '+' : ''}{improvement.toFixed(1)}% {language === 'ko' ? '개선' : 'improvement'}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* View Detailed Analytics Button */}
+        <button
+          onClick={goToAnalytics}
+          className="w-full mt-6 px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:from-indigo-700 hover:to-purple-700 transition-colors"
+        >
+          📊 {t('viewDetailedAnalytics')} →
+        </button>
+      </div>
     </div>
   );
 }

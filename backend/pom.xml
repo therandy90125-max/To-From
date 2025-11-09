@@ -61,6 +61,12 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 		
+		<!-- Spring Boot Starter Security (for CORS configuration) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		
 		<!-- Spring Boot DevTools (for development: auto-restart, live reload) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

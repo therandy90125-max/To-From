@@ -61,12 +61,28 @@ public class PortfolioOptimizationService {
                                                    Double riskFactor, String method, String period) {
         String url = flaskApiUrl + "/api/optimize/with-weights";
         
+        // 📦 디버깅: Flask로 전송하는 데이터 확인
+        logger.info("📤 Sending to Flask: {}", url);
+        logger.info("   → tickers: {} (개수: {})", tickers, tickers != null ? tickers.size() : 0);
+        logger.info("   → initial_weights: {} (개수: {})", initialWeights, initialWeights != null ? initialWeights.size() : 0);
+        
+        // Flask 서버 상태 먼저 확인
+        try {
+            Map<String, Object> healthCheck = checkFlaskHealth();
+            if (!"healthy".equals(healthCheck.get("status")) && !"ok".equals(healthCheck.get("status"))) {
+                logger.warn("⚠️ Flask 서버 상태 불량: {}", healthCheck);
+            }
+        } catch (Exception e) {
+            logger.warn("⚠️ Flask 서버 상태 확인 실패 (계속 진행): {}", e.getMessage());
+        }
+        
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("tickers", tickers);
         requestBody.put("initial_weights", initialWeights);
         requestBody.put("risk_factor", riskFactor != null ? riskFactor : 0.5);
         requestBody.put("method", method != null ? method : "quantum");
         requestBody.put("period", period != null ? period : "1y");
+        requestBody.put("fast_mode", true);  // 속도 최적화
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -74,12 +90,43 @@ public class PortfolioOptimizationService {
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
 
         try {
+            logger.info("🔄 Sending POST request to Flask...");
             ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
+            logger.info("✅ Received response from Flask: {}", response.getStatusCode());
             return response.getBody();
-        } catch (Exception e) {
+        } catch (org.springframework.web.client.ResourceAccessException e) {
+            // 연결 타임아웃 또는 연결 거부
+            logger.error("❌ Flask 서버 연결 실패 (ResourceAccessException): {}", e.getMessage());
+            if (e.getMessage() != null && e.getMessage().contains("timeout")) {
+                logger.error("💡 Flask 서버 응답이 너무 느립니다. 서버가 실행 중인지 확인하세요.");
+            } else if (e.getMessage() != null && e.getMessage().contains("Connection refused")) {
+                logger.error("💡 Flask 서버가 실행되지 않았습니다. http://localhost:5000 에서 실행 중인지 확인하세요.");
+            }
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
-            errorResponse.put("error", "Flask 서버 연결 실패: " + e.getMessage());
+            errorResponse.put("error", "Flask 서버 연결 실패: " + e.getMessage() + 
+                " (Flask 서버가 http://localhost:5000 에서 실행 중인지 확인하세요)");
+            return errorResponse;
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // 4xx 에러
+            logger.error("❌ Flask 서버 HTTP 에러 ({}): {}", e.getStatusCode(), e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Flask 서버 HTTP 에러 (" + e.getStatusCode() + "): " + e.getMessage());
+            return errorResponse;
+        } catch (org.springframework.web.client.HttpServerErrorException e) {
+            // 5xx 에러
+            logger.error("❌ Flask 서버 내부 에러 ({}): {}", e.getStatusCode(), e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Flask 서버 내부 에러 (" + e.getStatusCode() + "): " + e.getMessage());
+            return errorResponse;
+        } catch (Exception e) {
+            logger.error("❌ Flask 서버 연결 실패 (예외): {}", e.getMessage(), e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Flask 서버 연결 실패: " + e.getMessage() + 
+                " (Flask 서버가 http://localhost:5000 에서 실행 중인지 확인하세요)");
             return errorResponse;
         }
     }

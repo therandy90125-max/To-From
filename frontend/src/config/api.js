@@ -13,6 +13,7 @@ export const API_ENDPOINTS = {
   
   // Portfolio Optimization
   OPTIMIZE_PORTFOLIO: `${BACKEND_URL}/api/portfolio/optimize`,
+  OPTIMIZE_WITH_WEIGHTS: `${BACKEND_URL}/api/portfolio/optimize/with-weights`,
   
   // Currency
   EXCHANGE_RATE: (from, to) => `${BACKEND_URL}/api/currency/rate?from=${from}&to=${to}`,
@@ -70,15 +71,26 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Health check 유틸리티
+// Health check 유틸리티 (개선된 버전)
 export const checkBackendHealth = async () => {
-  try {
-    // 직접 URL 사용 (CORS 문제 방지)
-    const healthUrl = `${BACKEND_URL}/actuator/health`;
-    console.log('🔍 Checking backend health at:', healthUrl);
-    
-    // 먼저 간단한 연결 테스트
+  const healthEndpoints = [
+    `${BACKEND_URL}/actuator/health`,
+    `${BACKEND_URL}/api/portfolio/health/flask`,
+    `${BACKEND_URL}/api/stocks/health`
+  ];
+  
+  console.log('🔍 Checking backend health...');
+  console.log('📍 Backend URL:', BACKEND_URL);
+  
+  // 여러 엔드포인트 시도
+  for (const healthUrl of healthEndpoints) {
     try {
+      console.log(`🔍 Trying: ${healthUrl}`);
+      
+      // 타임아웃을 위한 AbortController 사용 (호환성 개선)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
       const response = await fetch(healthUrl, {
         method: 'GET',
         headers: {
@@ -86,45 +98,58 @@ export const checkBackendHealth = async () => {
         },
         mode: 'cors',
         credentials: 'omit',
-        cache: 'no-cache'
+        cache: 'no-cache',
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         try {
           const data = await response.json();
-          console.log('✅ Backend is healthy:', data);
+          console.log('✅ Backend is healthy:', healthUrl, data);
           return true;
         } catch (e) {
           // JSON 파싱 실패해도 상태 코드가 200이면 OK
-          console.log('✅ Backend is responding (Status:', response.status, ')');
+          console.log('✅ Backend is responding:', healthUrl, 'Status:', response.status);
           return true;
         }
       } else {
-        console.error('❌ Backend health check failed - Status:', response.status);
-        return false;
+        console.warn(`⚠️ ${healthUrl} returned status:`, response.status);
       }
     } catch (fetchError) {
-      // 네트워크 에러인 경우
-      console.error('❌ Backend connection failed:', fetchError.message);
-      
-      // CORS 에러인 경우 다른 방법 시도
-      if (fetchError.message.includes('CORS') || fetchError.message.includes('Failed to fetch')) {
-        console.log('⚠️ CORS error detected, trying alternative method...');
-        // apiClient를 사용한 재시도
-        try {
-          const response = await apiClient.get('/actuator/health');
-          console.log('✅ Backend is healthy (via apiClient):', response.data);
-          return true;
-        } catch (apiError) {
-          console.error('❌ apiClient also failed:', apiError.message);
-          return false;
-        }
+      // 네트워크 에러인 경우 다음 엔드포인트 시도
+      if (fetchError.name === 'AbortError') {
+        console.warn(`⏱️ Timeout for ${healthUrl}`);
+      } else {
+        console.warn(`❌ Failed to connect to ${healthUrl}:`, fetchError.message);
       }
-      return false;
+      continue;
     }
-  } catch (error) {
-    console.error('❌ Backend health check failed:', error.message);
-    console.error('Error details:', error);
+  }
+  
+  // 모든 엔드포인트 실패 시 apiClient로 재시도
+  console.log('⚠️ Direct fetch failed, trying apiClient...');
+  try {
+    const response = await apiClient.get('/actuator/health', { timeout: 5000 });
+    console.log('✅ Backend is healthy (via apiClient):', response.data);
+    return true;
+  } catch (apiError) {
+    console.error('❌ All health check methods failed');
+    console.error('Error details:', apiError.message);
+    
+    // 상세한 에러 정보 출력
+    if (apiError.code === 'ECONNREFUSED' || apiError.message.includes('Network Error')) {
+      console.error('💡 백엔드 서버가 실행 중이지 않을 수 있습니다.');
+      console.error('💡 다음 명령어로 서버를 시작하세요:');
+      console.error('   - PowerShell: .\\start-dev.ps1');
+      console.error('   - 또는 백엔드 디렉토리에서: .\\mvnw.cmd spring-boot:run');
+    } else if (apiError.message.includes('timeout')) {
+      console.error('💡 백엔드 서버 응답이 너무 느립니다.');
+    } else if (apiError.message.includes('CORS')) {
+      console.error('💡 CORS 설정 문제일 수 있습니다.');
+    }
+    
     return false;
   }
 };

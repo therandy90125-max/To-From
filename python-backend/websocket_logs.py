@@ -118,6 +118,6 @@ def init_websocket(app, socketio):
             'count': len(workflow_logger.logs)
         }
     
-    print("✅ WebSocket logging initialized")
+    print("[OK] WebSocket logging initialized")
     return workflow_logger
 
