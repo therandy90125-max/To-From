@@ -33,17 +33,64 @@ export default function PortfolioOptimizer() {
 
   // Load portfolio from Dashboard
   useEffect(() => {
-    const savedPortfolio = localStorage.getItem('currentPortfolio');
-    if (savedPortfolio) {
-      try {
-        const data = JSON.parse(savedPortfolio);
-        setOriginalPortfolio(data.portfolio.filter(s => s.shares > 0));
-        setPortfolioValue(data.totalValue);
-      } catch (e) {
-        console.error('Failed to load portfolio:', e);
+    const loadPortfolio = () => {
+      const savedPortfolio = localStorage.getItem('currentPortfolio');
+      if (savedPortfolio) {
+        try {
+          const data = JSON.parse(savedPortfolio);
+          const activePortfolio = data.portfolio.filter(s => s.shares > 0);
+          
+          if (activePortfolio.length >= 2) {
+            setOriginalPortfolio(activePortfolio);
+            setPortfolioValue(data.totalValue || 0);
+            console.log('[PortfolioOptimizer] ✅ Portfolio loaded:', {
+              stocks: activePortfolio.length,
+              portfolio: activePortfolio
+            });
+          } else {
+            console.warn('[PortfolioOptimizer] ⚠️ Insufficient stocks in portfolio:', activePortfolio.length);
+            setError(language === 'ko' 
+              ? '최적화를 위해서는 최소 2개 이상의 주식이 필요합니다.'
+              : 'At least 2 stocks are required for optimization.'
+            );
+          }
+        } catch (e) {
+          console.error('[PortfolioOptimizer] ❌ Failed to load portfolio:', e);
+          setError(language === 'ko'
+            ? '포트폴리오 데이터를 불러오는 중 오류가 발생했습니다.'
+            : 'Error loading portfolio data.'
+          );
+        }
+      } else {
+        console.warn('[PortfolioOptimizer] ⚠️ No portfolio data found in localStorage');
       }
-    }
-  }, []);
+    };
+    
+    loadPortfolio();
+    
+    // Listen for portfolio updates from Dashboard
+    const handleStorageChange = (e) => {
+      if (e.key === 'currentPortfolio') {
+        console.log('[PortfolioOptimizer] Portfolio updated in localStorage');
+        loadPortfolio();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom event from same window
+    const handlePortfolioUpdate = () => {
+      console.log('[PortfolioOptimizer] Portfolio update event received');
+      loadPortfolio();
+    };
+    
+    window.addEventListener('portfolioUpdated', handlePortfolioUpdate);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('portfolioUpdated', handlePortfolioUpdate);
+    };
+  }, [language]);
 
   // 백엔드 연결 확인 (컴포넌트 마운트시)
   useEffect(() => {
@@ -89,6 +136,9 @@ export default function PortfolioOptimizer() {
 
     setLoading(prev => ({ ...prev, quantum: true }));
     setError(null);
+    
+    // 전역 이벤트 발생: 양자 최적화 시작
+    window.dispatchEvent(new CustomEvent('quantumOptimizationStart'));
 
     try {
       // Prepare data
@@ -125,16 +175,25 @@ export default function PortfolioOptimizer() {
       });
 
       // portfolioApi.js의 optimizePortfolioWithWeights 사용 (Flask 직접 호출)
+      // ✅ Qiskit QAOA 양자 최적화 강제 실행
+      console.log('[PortfolioOptimizer] 🚀 Starting Qiskit QAOA Quantum Optimization...');
+      console.log('[PortfolioOptimizer] Method: quantum (Qiskit QAOA)');
+      console.log('[PortfolioOptimizer] Tickers:', tickers);
+      console.log('[PortfolioOptimizer] Initial weights:', initialWeights);
+      
       const response = await optimizePortfolioWithWeights({
         tickers,
         initialWeights: initialWeights,
         riskFactor: riskFactor,
-        method: 'quantum',  // Only quantum optimization
+        method: 'quantum',  // ✅ Qiskit QAOA 양자 최적화 강제
         period,
-        reps: 1,  // Fast execution (10-15 seconds)
-        precision: 4,
-        auto_save: false
+        reps: 1,  // Fast execution (10-15 seconds) - Qiskit QAOA reps
+        precision: 4,  // Binary encoding precision for QUBO
+        auto_save: false,
+        fast_mode: true  // Fast mode for QAOA
       });
+      
+      console.log('[PortfolioOptimizer] ✅ Qiskit QAOA Optimization completed');
 
       // Flask 직접 호출은 success 필드가 없을 수 있으므로 result 직접 확인
       const result = response.result || response;
@@ -146,6 +205,7 @@ export default function PortfolioOptimizer() {
         const optimizedData = result.optimized || {};
         const improvementsData = result.improvements || {};
         
+        // 백엔드 응답 구조: {original: {tickers, weights, ...}, optimized: {tickers, weights, ...}, improvements: {...}}
         const parsedResult = {
           selected_tickers: optimizedData.tickers || result.selected_tickers || tickers,
           optimized_weights: Array.isArray(optimizedData.weights) 
@@ -168,7 +228,8 @@ export default function PortfolioOptimizer() {
           improvement: improvementsData || result.improvement || result.improvements || {
             return_improvement: 0,
             risk_change: 0,
-            sharpe_improvement: 0
+            sharpe_improvement: 0,
+            score_improvement: 0
           },
           method: result.method || 'quantum',
           quantum_verified: result.quantum_verified !== false,
@@ -177,27 +238,49 @@ export default function PortfolioOptimizer() {
         
         setQuantumResult(parsedResult);
         
-        // Save to localStorage for Analytics
-        localStorage.setItem('lastOptimizationResult', JSON.stringify({
+        // Save to localStorage for Analytics - 백엔드 응답 구조와 정확히 일치하도록 저장
+        const analyticsData = {
           original: {
-            portfolio: originalPortfolio,
-            weights: initialWeights,
-            tickers,
-            expected_return: parsedResult.original_metrics.expected_return || 0,
-            risk: parsedResult.original_metrics.risk || 0,
-            sharpe_ratio: parsedResult.original_metrics.sharpe_ratio || 0
+            tickers: originalData.tickers || tickers,  // 백엔드에서 반환한 tickers 사용
+            weights: originalData.weights || initialWeights,  // 백엔드에서 반환한 weights 사용
+            expected_return: originalData.expected_return || parsedResult.original_metrics.expected_return || 0,
+            risk: originalData.risk || parsedResult.original_metrics.risk || 0,
+            sharpe_ratio: originalData.sharpe_ratio || parsedResult.original_metrics.sharpe_ratio || 0,
+            optimization_score: originalData.optimization_score || 0  // 백엔드에서 반환한 score 추가
           },
           optimized: {
-            expected_return: parsedResult.optimized_metrics.expected_return || 0,
-            risk: parsedResult.optimized_metrics.risk || 0,
-            sharpe_ratio: parsedResult.optimized_metrics.sharpe_ratio || 0,
-            weights: parsedResult.optimized_weights,
-            selected_tickers: parsedResult.selected_tickers
+            tickers: optimizedData.tickers || parsedResult.selected_tickers || tickers,  // 백엔드에서 반환한 tickers 사용 (selected_tickers 대신)
+            weights: optimizedData.weights || parsedResult.optimized_weights,  // 백엔드에서 반환한 weights 사용
+            expected_return: optimizedData.expected_return || parsedResult.optimized_metrics.expected_return || 0,
+            risk: optimizedData.risk || parsedResult.optimized_metrics.risk || 0,
+            sharpe_ratio: optimizedData.sharpe_ratio || parsedResult.optimized_metrics.sharpe_ratio || 0,
+            optimization_score: optimizedData.optimization_score || 0  // 백엔드에서 반환한 score 추가
           },
-          improvement: parsedResult.improvement,
+          improvement: parsedResult.improvement,  // improvements가 아닌 improvement로 저장 (Analytics와 일치)
           method: parsedResult.method || 'quantum',
           timestamp: new Date().toISOString()
-        }));
+        };
+        
+        // 디버깅: 저장되는 데이터 확인
+        console.log('[PortfolioOptimizer] 💾 Saving to localStorage for Analytics:', {
+          original: {
+            tickers: analyticsData.original.tickers,
+            weights: analyticsData.original.weights,
+            expected_return: analyticsData.original.expected_return,
+            risk: analyticsData.original.risk,
+            sharpe_ratio: analyticsData.original.sharpe_ratio
+          },
+          optimized: {
+            tickers: analyticsData.optimized.tickers,
+            weights: analyticsData.optimized.weights,
+            expected_return: analyticsData.optimized.expected_return,
+            risk: analyticsData.optimized.risk,
+            sharpe_ratio: analyticsData.optimized.sharpe_ratio
+          },
+          improvement: analyticsData.improvement
+        });
+        
+        localStorage.setItem('lastOptimizationResult', JSON.stringify(analyticsData));
       } else {
         setError(response.error || response.message || 'Optimization failed');
       }
@@ -231,11 +314,26 @@ export default function PortfolioOptimizer() {
       console.error('💡 Flask 서버 확인: http://localhost:5000/api/health');
     } finally {
       setLoading(prev => ({ ...prev, quantum: false }));
+      // 전역 이벤트 발생: 양자 최적화 종료
+      window.dispatchEvent(new CustomEvent('quantumOptimizationEnd'));
     }
   };
 
   // Run quantum optimization only (기존 포트폴리오 vs 양자 최적화)
   const runQuantumOptimization = async () => {
+    console.log('[PortfolioOptimizer] runQuantumOptimization called');
+    console.log('[PortfolioOptimizer] Original portfolio:', originalPortfolio);
+    console.log('[PortfolioOptimizer] Portfolio length:', originalPortfolio?.length);
+    
+    if (!originalPortfolio || originalPortfolio.length < 2) {
+      const errorMsg = language === 'ko' 
+        ? '최적화를 위해서는 최소 2개 이상의 주식이 필요합니다.'
+        : 'At least 2 stocks are required for optimization.';
+      setError(errorMsg);
+      alert(errorMsg);
+      return;
+    }
+    
     setShowComparison(true);
     await runOptimization();
   };
@@ -403,19 +501,76 @@ export default function PortfolioOptimizer() {
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <div className="text-center">
                 <h3 className="text-xl font-bold text-gray-900 mb-4">
-                  {language === 'ko' ? '🔬 양자 포트폴리오 최적화' : '🔬 Quantum Portfolio Optimization'}
+                  {language === 'ko' ? '🔬 Qiskit QAOA 양자 최적화' : '🔬 Qiskit QAOA Quantum Optimization'}
                 </h3>
                 <p className="text-gray-600 mb-6">
                   {language === 'ko' 
-                    ? '기존 포트폴리오와 양자 알고리즘으로 최적화된 포트폴리오를 비교합니다.'
-                    : 'Compare your original portfolio with quantum-optimized portfolio.'}
+                    ? 'Qiskit QAOA 양자 알고리즘으로 포트폴리오를 최적화합니다.'
+                    : 'Optimize your portfolio using Qiskit QAOA quantum algorithm.'}
                 </p>
                 <button
-                  onClick={runQuantumOptimization}
+                  type="button"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    console.log('='.repeat(60));
+                    console.log('[PortfolioOptimizer] 🚀 Quantum optimization button clicked!');
+                    console.log('[PortfolioOptimizer] Loading state:', loading.quantum);
+                    console.log('[PortfolioOptimizer] Original portfolio:', originalPortfolio);
+                    console.log('[PortfolioOptimizer] Portfolio length:', originalPortfolio?.length);
+                    console.log('='.repeat(60));
+                    
+                    if (loading.quantum) {
+                      console.warn('[PortfolioOptimizer] ⚠️ Already optimizing, ignoring click');
+                      return;
+                    }
+                    
+                    if (!originalPortfolio || originalPortfolio.length < 2) {
+                      const errorMsg = language === 'ko' 
+                        ? '최적화를 위해서는 최소 2개 이상의 주식이 필요합니다.'
+                        : 'At least 2 stocks are required for optimization.';
+                      console.error('[PortfolioOptimizer] ❌ Validation failed:', errorMsg);
+                      alert(errorMsg);
+                      return;
+                    }
+                    
+                    // Flask 서버 연결 확인
+                    const FLASK_URL = import.meta.env.VITE_PYTHON_BACKEND_URL || import.meta.env.VITE_FLASK_URL || 'http://localhost:5000';
+                    console.log('[PortfolioOptimizer] Checking Flask server:', FLASK_URL);
+                    
+                    try {
+                      const healthCheck = await fetch(`${FLASK_URL}/api/health`, {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' },
+                        signal: AbortSignal.timeout(5000)
+                      });
+                      
+                      if (healthCheck.ok) {
+                        console.log('[PortfolioOptimizer] ✅ Flask server is healthy');
+                        runQuantumOptimization();
+                      } else {
+                        throw new Error(`Flask server returned ${healthCheck.status}`);
+                      }
+                    } catch (flaskError) {
+                      console.error('[PortfolioOptimizer] ❌ Flask server check failed:', flaskError);
+                      const errorMsg = language === 'ko'
+                        ? `Flask 서버에 연결할 수 없습니다.\n\nFlask 서버가 ${FLASK_URL}에서 실행 중인지 확인하세요.\n\n에러: ${flaskError.message}`
+                        : `Cannot connect to Flask server.\n\nPlease check if Flask server is running at ${FLASK_URL}.\n\nError: ${flaskError.message}`;
+                      setError(errorMsg);
+                      alert(errorMsg);
+                    }
+                  }}
                   disabled={loading.quantum}
                   className="px-8 py-4 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl font-bold text-lg hover:from-purple-600 hover:to-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                  style={{
+                    cursor: loading.quantum ? 'not-allowed' : 'pointer',
+                    pointerEvents: loading.quantum ? 'none' : 'auto',
+                    position: 'relative',
+                    zIndex: 10
+                  }}
                 >
-                  {loading.quantum ? '⏳ ' + t('optimizing') : '🚀 ' + (language === 'ko' ? '양자 최적화 실행' : 'Run Quantum Optimization')}
+                  {loading.quantum ? '⏳ ' + (language === 'ko' ? '양자 최적화 실행 중...' : 'Running Quantum Optimization...') : '🚀 ' + (language === 'ko' ? '양자 최적화 실행' : 'Run Quantum Optimization')}
                 </button>
               </div>
             </div>
@@ -543,14 +698,6 @@ function OptimizationResultCard({ result, currencySymbol, t, color }) {
         </div>
       </div>
 
-      {!verified && quantumNote && (
-        <div className="quantum-fallback-note">
-          {quantumNote}
-          {quantumStatus && (
-            <span className="block text-xs opacity-70 mt-1">({quantumStatus})</span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -642,19 +789,6 @@ function OriginalVsQuantumView({ originalPortfolio, quantumResult, currencySymbo
 
   return (
     <div className="space-y-6">
-      {!quantumVerified && (
-        <div className="quantum-fallback-banner">
-          <div>
-            <strong>{t('quantumFallbackTitle')}</strong>
-            <span className="block text-sm">
-              {language === 'ko' ? t('quantumFallbackDescription') : t('quantumFallbackDescription')}
-            </span>
-            {quantumNote && (
-              <span className="block text-xs opacity-80 mt-1">{quantumNote}</span>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Header */}
       <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-lg p-6 border-2 border-indigo-200">

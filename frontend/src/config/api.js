@@ -28,10 +28,17 @@ export const apiClient = axios.create({
   baseURL: BACKEND_URL,
   timeout: 30000,
   headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Content-Type': 'application/json; charset=utf-8',
+    'Accept': 'application/json; charset=utf-8'
   },
-  withCredentials: false  // CORS credentials
+  withCredentials: false,  // CORS credentials
+  // UTF-8 인코딩 명시적 설정
+  paramsSerializer: {
+    encode: (param, key) => {
+      // 한글 및 특수문자 URL 인코딩
+      return encodeURIComponent(param);
+    }
+  }
 });
 
 // 요청 인터셉터 (디버깅)
@@ -151,6 +158,62 @@ export const checkBackendHealth = async () => {
     }
     
     return false;
+  }
+};
+
+/**
+ * 주식 검색 함수
+ * 
+ * @param {string} query 검색어 (한글 지원)
+ * @param {string} market 시장 필터 ('KR' | 'US' | 'ALL', 기본값: 'ALL')
+ * @returns {Promise<Array>} 검색 결과 배열
+ */
+export const searchStocks = async (query, market = 'ALL') => {
+  if (!query || query.trim().length < 1) {
+    return [];
+  }
+
+  try {
+    // URL 인코딩: encodeURIComponent() 사용
+    const encodedQuery = encodeURIComponent(query.trim());
+    const url = `${API_ENDPOINTS.STOCK_SEARCH}?query=${encodedQuery}&market=${market}`;
+    
+    console.log(`🔍 Searching stocks: query="${query}", market="${market}"`);
+    
+    // 타임아웃: 10초 (더 빠른 응답)
+    const response = await apiClient.get(url, {
+      timeout: 10000
+    });
+    
+    // Backend returns { success: true, data: [...], count: N }
+    if (response.data.success && response.data.data) {
+      console.log(`✅ Found ${response.data.data.length} stocks`);
+      return response.data.data;
+    } else if (response.data.success && response.data.results) {
+      // Fallback for old API format
+      return response.data.results;
+    } else {
+      return [];
+    }
+  } catch (err) {
+    console.error('Stock search error:', err);
+    
+    // 타임아웃 에러 처리
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      console.warn('Search timeout - API 응답이 지연되고 있습니다.');
+      throw new Error('요청 시간 초과');
+    } else if (err.response?.status === 503) {
+      console.warn('Service unavailable - 서비스에 연결할 수 없습니다.');
+      throw new Error('검색 서비스에 연결할 수 없습니다. 잠시 후 다시 시도하세요.');
+    } else if (err.response?.status === 400) {
+      console.warn('Bad request - 잘못된 요청입니다.');
+      throw new Error('검색어를 올바르게 입력해주세요.');
+    } else if (err.response?.status === 500) {
+      console.warn('Server error - 서버에 일시적인 문제가 발생했습니다.');
+      throw new Error('검색에 실패했습니다. 다시 시도하세요.');
+    }
+    
+    throw new Error('검색에 실패했습니다. 다시 시도하세요.');
   }
 };
 

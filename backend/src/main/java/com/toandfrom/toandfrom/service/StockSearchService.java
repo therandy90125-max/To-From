@@ -1,6 +1,8 @@
 package com.toandfrom.toandfrom.service;
 
+import com.toandfrom.toandfrom.client.AlphaVantageClient;
 import com.toandfrom.toandfrom.dto.StockSearchResponseDTO;
+import com.toandfrom.toandfrom.entity.Stock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +18,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +30,10 @@ public class StockSearchService {
     
     private final RestTemplate restTemplate;
     private final CurrencyService currencyService;
+    private final AlphaVantageClient alphaVantageClient;
+    private final YFinanceFallbackService yFinanceFallbackService;
+    private final StockCacheService stockCacheService;
+    private final ExecutorService executorService;
     
     @Value("${flask.api.url:http://localhost:5000}")
     private String flaskApiUrl;
@@ -33,9 +42,18 @@ public class StockSearchService {
     // Note: Will be initialized in constructor after currencyService is injected
     private List<Map<String, String>> POPULAR_STOCKS;
     
-    public StockSearchService(RestTemplate restTemplate, CurrencyService currencyService) {
+    public StockSearchService(
+            RestTemplate restTemplate, 
+            CurrencyService currencyService,
+            AlphaVantageClient alphaVantageClient,
+            YFinanceFallbackService yFinanceFallbackService,
+            StockCacheService stockCacheService) {
         this.restTemplate = restTemplate;
         this.currencyService = currencyService;
+        this.alphaVantageClient = alphaVantageClient;
+        this.yFinanceFallbackService = yFinanceFallbackService;
+        this.stockCacheService = stockCacheService;
+        this.executorService = Executors.newFixedThreadPool(5);
         
         // Initialize popular stocks list (now with currency info)
         this.POPULAR_STOCKS = Arrays.asList(
@@ -95,28 +113,83 @@ public class StockSearchService {
      * 티커 또는 회사명으로 검색
      * 
      * @param query 검색어
+     * @param market 시장 필터 (KR/US/ALL)
      * @return 검색 결과 목록 (DTO 형식, 최대 10개)
      */
-    public List<StockSearchResponseDTO> searchStocks(String query) {
+    public List<StockSearchResponseDTO> searchStocks(String query, String market) {
         if (query == null || query.trim().isEmpty()) {
             return new ArrayList<>();
         }
         
-        // 1. Flask API에서 검색 시도 (더 많은 주식 데이터)
+        // market 파라미터 정규화
+        if (market == null) {
+            market = "ALL";
+        }
+        market = market.toUpperCase();
+        
+        log.info("Stock search: query='{}', market='{}'", query, market);
+        
+        List<StockSearchResponseDTO> results = new ArrayList<>();
+        
+        // 0. 캐시에서 먼저 검색 (빠른 응답)
+        List<Stock> cachedResults = stockCacheService.searchFromCache(query, market);
+        if (!cachedResults.isEmpty()) {
+            log.info("Found {} stocks from cache", cachedResults.size());
+            for (Stock cached : cachedResults) {
+                StockSearchResponseDTO dto = convertStockToDTO(cached);
+                if (dto != null) {
+                    results.add(dto);
+                }
+            }
+            // 캐시에서 충분한 결과를 찾았으면 반환 (최대 10개)
+            if (results.size() >= 10) {
+                return results.stream().limit(10).collect(Collectors.toList());
+            }
+        }
+        
+        // 1. 한국 주식 검색 (market == "KR" 또는 "ALL")
+        if ("KR".equals(market) || "ALL".equals(market)) {
+            List<StockSearchResponseDTO> koreanResults = searchKoreanStocks(query);
+            results.addAll(koreanResults);
+        }
+        
+        // 2. 미국 주식 검색 (market == "US" 또는 "ALL")
+        if ("US".equals(market) || "ALL".equals(market)) {
+            List<StockSearchResponseDTO> usResults = searchUsStocks(query);
+            results.addAll(usResults);
+        }
+        
+        // 3. 중복 제거 및 정렬 (매치 스코어 기준)
+        results = deduplicateAndSort(results);
+        
+        // 4. 실시간 가격 정보 추가
+        enrichWithRealTimePrices(results);
+        
+        log.info("Total search results: {} stocks found", results.size());
+        return results;
+    }
+    
+    /**
+     * 한국 주식 검색
+     */
+    private List<StockSearchResponseDTO> searchKoreanStocks(String query) {
+        List<StockSearchResponseDTO> results = new ArrayList<>();
+        
+        // Flask API에서 한국 주식 검색
         try {
             String url = flaskApiUrl + "/api/stocks/search?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
-            log.info("Searching stocks via Flask API: {}", url);
+            log.debug("Searching Korean stocks via Flask API: {}", url);
             
             @SuppressWarnings("unchecked")
-            ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+            ResponseEntity<List<Map<String, Object>>> response = 
+                restTemplate.getForEntity(url, (Class<List<Map<String, Object>>>) (Class<?>) List.class);
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> flaskResults = (List<Map<String, Object>>) response.getBody();
+                List<Map<String, Object>> flaskResults = response.getBody();
                 
                 if (flaskResults != null && !flaskResults.isEmpty()) {
                     // Convert Flask results to DTOs
-                    List<StockSearchResponseDTO> results = new ArrayList<>();
+                    List<StockSearchResponseDTO> flaskDtos = new ArrayList<>();
                     for (Map<String, Object> stock : flaskResults) {
                         String ticker = (String) stock.get("ticker");
                         String name = (String) stock.get("name");
@@ -135,54 +208,276 @@ public class StockSearchService {
                                 .volume(0L)
                                 .lastUpdated(LocalDateTime.now())
                                 .build();
-                            results.add(dto);
+                            flaskDtos.add(dto);
                         }
                     }
                     
-                    // Enrich with real-time prices
-                    enrichWithRealTimePrices(results);
+                    // 한국 주식만 필터링
+                    flaskDtos = flaskDtos.stream()
+                        .filter(dto -> dto.getMarket() != null && 
+                            (dto.getMarket().equals("KRX") || 
+                             dto.getSymbol().matches("\\d{6}(\\.KS|\\.KQ)")))
+                        .collect(Collectors.toList());
                     
-                    log.info("Found {} stocks from Flask API", results.size());
-                    return results;
+                    log.info("Found {} Korean stocks from Flask API", flaskDtos.size());
+                    return flaskDtos;
                 }
             } else {
                 log.warn("Flask API returned non-2xx status: {}", response.getStatusCode());
             }
         } catch (org.springframework.web.client.ResourceAccessException e) {
-            log.warn("Flask API connection failed (server may not be running at {}): {}", flaskApiUrl, e.getMessage());
-            log.info("Falling back to popular stocks list (includes US stocks: AAPL, GOOGL, MSFT, etc.)");
+            log.warn("Flask API connection failed: {}", e.getMessage());
         } catch (Exception e) {
-            log.warn("Flask API search failed, falling back to popular stocks: {}", e.getMessage());
+            log.warn("Flask API search failed: {}", e.getMessage());
             log.debug("Exception details: ", e);
         }
         
-        // 2. Fallback: 인기 주식 목록에서 검색
+        // yfinance 폴백: 6자리 코드 자동 변환
+        if (query.matches("\\d{6}")) {
+            List<String> tickers = yFinanceFallbackService.convertKoreanCode(query);
+            for (String ticker : tickers) {
+                try {
+                    // Flask API로 yfinance 조회 시도
+                    String url = flaskApiUrl + "/api/stocks/search?q=" + URLEncoder.encode(ticker, StandardCharsets.UTF_8);
+                    @SuppressWarnings("unchecked")
+                    ResponseEntity<List<Map<String, Object>>> response = 
+                        restTemplate.getForEntity(url, (Class<List<Map<String, Object>>>) (Class<?>) List.class);
+                    
+                    if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                        List<Map<String, Object>> flaskResults = response.getBody();
+                        if (flaskResults != null && !flaskResults.isEmpty()) {
+                            // 첫 번째 결과만 사용
+                            Map<String, Object> stock = flaskResults.get(0);
+                            StockSearchResponseDTO dto = convertFlaskResultToDTO(stock);
+                            if (dto != null) {
+                                results.add(dto);
+                                yFinanceFallbackService.logSuccess(ticker, dto.getName());
+                                break; // 성공하면 다른 티커 시도 불필요
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    yFinanceFallbackService.logFailure(ticker, e.getMessage());
+                }
+            }
+        }
+        
+        return results;
+    }
+    
+    /**
+     * 미국 주식 검색 (로컬 + Alpha Vantage API 병렬)
+     */
+    private List<StockSearchResponseDTO> searchUsStocks(String query) {
+        List<StockSearchResponseDTO> results = new ArrayList<>();
+        
+        // 1. 로컬 데이터베이스 검색 (인기 주식 목록)
         String queryUpper = query.toUpperCase();
-        List<Map<String, String>> matchedStocks = POPULAR_STOCKS.stream()
-            .filter(stock -> 
-                stock.get("ticker").toUpperCase().contains(queryUpper) ||
-                stock.get("name").toUpperCase().contains(queryUpper)
-            )
+        List<Map<String, String>> localMatches = POPULAR_STOCKS.stream()
+            .filter(stock -> {
+                String ticker = stock.get("ticker").toUpperCase();
+                String name = stock.get("name").toUpperCase();
+                String market = stock.getOrDefault("market", "").toUpperCase();
+                
+                // 미국 주식만 필터링
+                return ("US".equals(market) || "NASDAQ".equals(market) || "NYSE".equals(market) ||
+                        (!ticker.matches("\\d{6}(\\.KS|\\.KQ)") && !ticker.contains(".KS") && !ticker.contains(".KQ"))) &&
+                       (ticker.contains(queryUpper) || name.contains(queryUpper));
+            })
             .limit(10)
             .collect(Collectors.toList());
         
-        // Convert to DTO
-        List<StockSearchResponseDTO> results = new ArrayList<>();
-        for (Map<String, String> stock : matchedStocks) {
+        for (Map<String, String> stock : localMatches) {
             StockSearchResponseDTO dto = convertToDTO(stock);
             results.add(dto);
         }
         
-        // Enrich with real-time prices using batch API (more efficient)
-        enrichWithRealTimePrices(results);
+        // 2. Alpha Vantage API 병렬 검색
+        CompletableFuture<List<StockSearchResponseDTO>> alphaVantageFuture = 
+            CompletableFuture.supplyAsync(() -> {
+                try {
+                    List<AlphaVantageClient.AlphaVantageSearchResult> avResults = 
+                        alphaVantageClient.searchSymbol(query);
+                    
+                    List<StockSearchResponseDTO> avDtos = new ArrayList<>();
+                    for (AlphaVantageClient.AlphaVantageSearchResult avResult : avResults) {
+                        // 미국 주식/ETF만 필터링
+                        String region = avResult.getRegion();
+                        if (region != null && 
+                            (region.contains("United States") || region.contains("US"))) {
+                            
+                            StockSearchResponseDTO dto = StockSearchResponseDTO.builder()
+                                .symbol(avResult.getSymbol())
+                                .name(avResult.getName())
+                                .market(detectExchangeFromSymbol(avResult.getSymbol()))
+                                .currency("USD")
+                                .currentPrice(BigDecimal.ZERO)
+                                .changePercent("0.00%")
+                                .changeAmount(BigDecimal.ZERO)
+                                .previousClose(BigDecimal.ZERO)
+                                .volume(0L)
+                                .lastUpdated(LocalDateTime.now())
+                                .build();
+                            avDtos.add(dto);
+                        }
+                    }
+                    
+                    log.info("Alpha Vantage found {} US stocks", avDtos.size());
+                    return avDtos;
+                } catch (Exception e) {
+                    log.warn("Alpha Vantage search failed: {}", e.getMessage());
+                    return new ArrayList<>();
+                }
+            }, executorService);
         
-        log.info("Found {} stocks from popular stocks list", results.size());
+        try {
+            // 타임아웃 10초
+            List<StockSearchResponseDTO> avResults = alphaVantageFuture.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            results.addAll(avResults);
+        } catch (Exception e) {
+            log.warn("Alpha Vantage search timeout or error: {}", e.getMessage());
+            alphaVantageFuture.cancel(true);
+        }
+        
+        // 3. yfinance 폴백 (미국 심볼)
+        if (yFinanceFallbackService.isUsSymbol(query)) {
+            try {
+                String url = flaskApiUrl + "/api/stocks/search?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
+                @SuppressWarnings("unchecked")
+                ResponseEntity<List<Map<String, Object>>> response = 
+                    restTemplate.getForEntity(url, (Class<List<Map<String, Object>>>) (Class<?>) List.class);
+                
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    List<Map<String, Object>> flaskResults = response.getBody();
+                    if (flaskResults != null && !flaskResults.isEmpty()) {
+                        for (Map<String, Object> stock : flaskResults) {
+                            StockSearchResponseDTO dto = convertFlaskResultToDTO(stock);
+                            if (dto != null && !results.stream().anyMatch(r -> r.getSymbol().equals(dto.getSymbol()))) {
+                                results.add(dto);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                yFinanceFallbackService.logFailure(query, e.getMessage());
+            }
+        }
+        
         return results;
+    }
+    
+    /**
+     * Flask API 결과를 DTO로 변환
+     */
+    private StockSearchResponseDTO convertFlaskResultToDTO(Map<String, Object> stock) {
+        try {
+            String ticker = (String) stock.get("ticker");
+            String name = (String) stock.get("name");
+            String exchange = (String) stock.get("exchange");
+            
+            if (ticker == null) {
+                return null;
+            }
+            
+            return StockSearchResponseDTO.builder()
+                .symbol(ticker)
+                .name(name != null ? name : ticker)
+                .market(exchange != null ? exchange : StockSearchResponseDTO.detectMarket(ticker))
+                .currency(StockSearchResponseDTO.detectCurrencyFromSymbol(ticker))
+                .currentPrice(BigDecimal.ZERO)
+                .changePercent("0.00%")
+                .changeAmount(BigDecimal.ZERO)
+                .previousClose(BigDecimal.ZERO)
+                .volume(0L)
+                .lastUpdated(LocalDateTime.now())
+                .build();
+        } catch (Exception e) {
+            log.debug("Failed to convert Flask result to DTO: {}", e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 심볼에서 거래소 추정
+     */
+    private String detectExchangeFromSymbol(String symbol) {
+        if (symbol == null) {
+            return "UNKNOWN";
+        }
+        
+        // NASDAQ 일반적인 패턴
+        if (symbol.length() <= 4 && symbol.matches("^[A-Z]{1,4}$")) {
+            return "NASDAQ";
+        }
+        
+        // NYSE 일반적인 패턴
+        if (symbol.length() <= 5 && symbol.matches("^[A-Z0-9.]{1,5}$")) {
+            return "NYSE";
+        }
+        
+        return "UNKNOWN";
+    }
+    
+    /**
+     * 중복 제거 및 정렬
+     */
+    private List<StockSearchResponseDTO> deduplicateAndSort(List<StockSearchResponseDTO> results) {
+        // 심볼 기준 중복 제거
+        Map<String, StockSearchResponseDTO> uniqueResults = new LinkedHashMap<>();
+        for (StockSearchResponseDTO dto : results) {
+            String symbol = dto.getSymbol();
+            if (symbol != null && !uniqueResults.containsKey(symbol)) {
+                uniqueResults.put(symbol, dto);
+            }
+        }
+        
+        // 최대 10개만 반환
+        return uniqueResults.values().stream()
+            .limit(10)
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * 기존 searchStocks 메서드 (하위 호환성)
+     */
+    public List<StockSearchResponseDTO> searchStocks(String query) {
+        return searchStocks(query, "ALL");
     }
     
     /**
      * Convert Map to StockSearchResponseDTO
      */
+    /**
+     * Stock을 StockSearchResponseDTO로 변환
+     */
+    private StockSearchResponseDTO convertStockToDTO(Stock cached) {
+        if (cached == null) {
+            return null;
+        }
+        
+        String symbol = cached.getSymbol();
+        String name = cached.getName();
+        String nameKo = cached.getNameKo();
+        
+        // 한국 주식의 경우 한글명 우선 표시
+        if ("KR".equals(cached.getMarket()) && nameKo != null && !nameKo.isEmpty()) {
+            name = nameKo;
+        }
+        
+        return StockSearchResponseDTO.builder()
+            .symbol(symbol)
+            .name(name)
+            .market(cached.getMarket())
+            .currency("KR".equals(cached.getMarket()) ? "KRW" : "USD")
+            .currentPrice(BigDecimal.ZERO)  // 캐시에는 가격 정보 없음
+            .changePercent("0.00%")
+            .changeAmount(BigDecimal.ZERO)
+            .previousClose(BigDecimal.ZERO)
+            .volume(0L)
+            .lastUpdated(cached.getLastVerified() != null ? cached.getLastVerified() : LocalDateTime.now())
+            .build();
+    }
+    
     private StockSearchResponseDTO convertToDTO(Map<String, String> stock) {
         String ticker = stock.get("ticker");
         String name = stock.get("name");

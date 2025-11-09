@@ -1,0 +1,618 @@
+[
+  {
+    "ticker": "000120",
+    "name_en": "CJ",
+    "name_ko": "CJ",
+    "market": "KOSPI",
+    "sector": "식품"
+  },
+  {
+    "ticker": "000150",
+    "name_en": "Doosan",
+    "name_ko": "두산",
+    "market": "KOSPI",
+    "sector": "중공업"
+  },
+  {
+    "ticker": "000270",
+    "name_en": "Kia Corporation",
+    "name_ko": "기아",
+    "market": "KOSPI",
+    "sector": "자동차"
+  },
+  {
+    "ticker": "000660",
+    "name_en": "SK Hynix",
+    "name_ko": "SK하이닉스",
+    "market": "KOSPI",
+    "sector": "반도체"
+  },
+  {
+    "ticker": "000720",
+    "name_en": "Hyundai Engineering & Construction",
+    "name_ko": "현대건설",
+    "market": "KOSPI",
+    "sector": "건설"
+  },
+  {
+    "ticker": "001570",
+    "name_en": "Kumho Tire",
+    "name_ko": "금호타이어",
+    "market": "KOSPI",
+    "sector": "타이어"
+  },
+  {
+    "ticker": "002310",
+    "name_en": "Asia Paper",
+    "name_ko": "아세아제지",
+    "market": "KOSPI",
+    "sector": "제지"
+  },
+  {
+    "ticker": "002380",
+    "name_en": "KCC",
+    "name_ko": "KCC",
+    "market": "KOSPI",
+    "sector": "화학"
+  },
+  {
+    "ticker": "002790",
+    "name_en": "Amorepacific",
+    "name_ko": "아모레퍼시픽",
+    "market": "KOSPI",
+    "sector": "화장품"
+  },
+  {
+    "ticker": "003230",
+    "name_en": "Samyang Holdings",
+    "name_ko": "삼양홀딩스",
+    "market": "KOSPI",
+    "sector": "식품"
+  },
+  {
+    "ticker": "003520",
+    "name_en": "Yungjin Pharm",
+    "name_ko": "영진약품",
+    "market": "KOSDAQ",
+    "sector": "제약"
+  },
+  {
+    "ticker": "003550",
+    "name_en": "LG",
+    "name_ko": "LG",
+    "market": "KOSPI",
+    "sector": "전자"
+  },
+  {
+    "ticker": "003670",
+    "name_en": "Posco Future M",
+    "name_ko": "포스코퓨처엠",
+    "market": "KOSPI",
+    "sector": "화학"
+  },
+  {
+    "ticker": "004020",
+    "name_en": "Hyundai Steel",
+    "name_ko": "현대제철",
+    "market": "KOSPI",
+    "sector": "철강"
+  },
+  {
+    "ticker": "004170",
+    "name_en": "Shinsegae",
+    "name_ko": "신세계",
+    "market": "KOSPI",
+    "sector": "유통"
+  },
+  {
+    "ticker": "005380",
+    "name_en": "Hyundai Motor",
+    "name_ko": "현대자동차",
+    "market": "KOSPI",
+    "sector": "자동차"
+  },
+  {
+    "ticker": "005490",
+    "name_en": "POSCO Holdings",
+    "name_ko": "POSCO홀딩스",
+    "market": "KOSPI",
+    "sector": "철강"
+  },
+  {
+    "ticker": "005830",
+    "name_en": "DB Insurance",
+    "name_ko": "DB손해보험",
+    "market": "KOSPI",
+    "sector": "보험"
+  },
+  {
+    "ticker": "005930",
+    "name_en": "Samsung Electronics",
+    "name_ko": "삼성전자",
+    "market": "KOSPI",
+    "sector": "전자"
+  },
+  {
+    "ticker": "005940",
+    "name_en": "NH Investment & Securities",
+    "name_ko": "NH투자증권",
+    "market": "KOSPI",
+    "sector": "증권"
+  },
+  {
+    "ticker": "006260",
+    "name_en": "LS",
+    "name_ko": "LS",
+    "market": "KOSPI",
+    "sector": "전기전자"
+  },
+  {
+    "ticker": "006360",
+    "name_en": "GS",
+    "name_ko": "GS",
+    "market": "KOSPI",
+    "sector": "에너지"
+  },
+  {
+    "ticker": "006370",
+    "name_en": "Doosan Heavy Industries",
+    "name_ko": "두산중공업",
+    "market": "KOSPI",
+    "sector": "중공업"
+  },
+  {
+    "ticker": "006400",
+    "name_en": "Samsung SDI",
+    "name_ko": "삼성SDI",
+    "market": "KOSPI",
+    "sector": "전지"
+  },
+  {
+    "ticker": "006800",
+    "name_en": "Mirae Asset Securities",
+    "name_ko": "미래에셋증권",
+    "market": "KOSPI",
+    "sector": "증권"
+  },
+  {
+    "ticker": "007310",
+    "name_en": "Ottogi",
+    "name_ko": "오뚜기",
+    "market": "KOSPI",
+    "sector": "식품"
+  },
+  {
+    "ticker": "008770",
+    "name_en": "Hotel Shilla",
+    "name_ko": "호텔신라",
+    "market": "KOSPI",
+    "sector": "호텔"
+  },
+  {
+    "ticker": "009150",
+    "name_en": "Samsung Electro-Mechanics",
+    "name_ko": "삼성전기",
+    "market": "KOSPI",
+    "sector": "전자부품"
+  },
+  {
+    "ticker": "009540",
+    "name_en": "Korea Gas",
+    "name_ko": "한국가스공사",
+    "market": "KOSPI",
+    "sector": "가스"
+  },
+  {
+    "ticker": "009830",
+    "name_en": "Hanwha Solutions",
+    "name_ko": "한화솔루션",
+    "market": "KOSPI",
+    "sector": "화학"
+  },
+  {
+    "ticker": "010130",
+    "name_en": "Korea Zinc",
+    "name_ko": "한국아연",
+    "market": "KOSPI",
+    "sector": "비철금속"
+  },
+  {
+    "ticker": "010140",
+    "name_en": "Samsung Fire & Marine",
+    "name_ko": "삼성화재",
+    "market": "KOSPI",
+    "sector": "보험"
+  },
+  {
+    "ticker": "010950",
+    "name_en": "S-Oil",
+    "name_ko": "S-Oil",
+    "market": "KOSPI",
+    "sector": "정유"
+  },
+  {
+    "ticker": "011070",
+    "name_en": "LG Innotek",
+    "name_ko": "LG이노텍",
+    "market": "KOSPI",
+    "sector": "전자부품"
+  },
+  {
+    "ticker": "011200",
+    "name_en": "HMM",
+    "name_ko": "HMM",
+    "market": "KOSPI",
+    "sector": "운송"
+  },
+  {
+    "ticker": "011780",
+    "name_en": "Korea Gas Corporation",
+    "name_ko": "한국가스공사",
+    "market": "KOSPI",
+    "sector": "가스"
+  },
+  {
+    "ticker": "012330",
+    "name_en": "Hyundai Mobis",
+    "name_ko": "현대모비스",
+    "market": "KOSPI",
+    "sector": "자동차부품"
+  },
+  {
+    "ticker": "012450",
+    "name_en": "Hanwha Aerospace",
+    "name_ko": "한화에어로스페이스",
+    "market": "KOSPI",
+    "sector": "항공"
+  },
+  {
+    "ticker": "015760",
+    "name_en": "Korea Electric Power",
+    "name_ko": "한국전력",
+    "market": "KOSPI",
+    "sector": "전력"
+  },
+  {
+    "ticker": "016360",
+    "name_en": "Samsung Securities",
+    "name_ko": "삼성증권",
+    "market": "KOSPI",
+    "sector": "증권"
+  },
+  {
+    "ticker": "017670",
+    "name_en": "SK Telecom",
+    "name_ko": "SK텔레콤",
+    "market": "KOSPI",
+    "sector": "통신"
+  },
+  {
+    "ticker": "017800",
+    "name_en": "Hyundai Elevator",
+    "name_ko": "현대엘리베이터",
+    "market": "KOSPI",
+    "sector": "기계"
+  },
+  {
+    "ticker": "018260",
+    "name_en": "Samsung SDS",
+    "name_ko": "삼성SDS",
+    "market": "KOSPI",
+    "sector": "IT서비스"
+  },
+  {
+    "ticker": "018880",
+    "name_en": "Samsung Securities",
+    "name_ko": "삼성증권",
+    "market": "KOSPI",
+    "sector": "증권"
+  },
+  {
+    "ticker": "020150",
+    "name_en": "Iljin Materials",
+    "name_ko": "일진머티리얼즈",
+    "market": "KOSDAQ",
+    "sector": "소재"
+  },
+  {
+    "ticker": "023530",
+    "name_en": "Lotte Chemical",
+    "name_ko": "롯데케미칼",
+    "market": "KOSPI",
+    "sector": "화학"
+  },
+  {
+    "ticker": "024110",
+    "name_en": "Heungkuk Fire & Marine",
+    "name_ko": "흥국화재",
+    "market": "KOSPI",
+    "sector": "보험"
+  },
+  {
+    "ticker": "028050",
+    "name_en": "Samsung C&T",
+    "name_ko": "삼성물산",
+    "market": "KOSPI",
+    "sector": "건설"
+  },
+  {
+    "ticker": "028150",
+    "name_en": "GS Retail",
+    "name_ko": "GS리테일",
+    "market": "KOSPI",
+    "sector": "유통"
+  },
+  {
+    "ticker": "028260",
+    "name_en": "Samsung C&T",
+    "name_ko": "삼성물산",
+    "market": "KOSPI",
+    "sector": "건설"
+  },
+  {
+    "ticker": "028300",
+    "name_en": "HLB",
+    "name_ko": "HLB",
+    "market": "KOSDAQ",
+    "sector": "바이오"
+  },
+  {
+    "ticker": "029780",
+    "name_en": "Samsung Card",
+    "name_ko": "삼성카드",
+    "market": "KOSPI",
+    "sector": "금융"
+  },
+  {
+    "ticker": "030000",
+    "name_en": "Hyundai Department Store",
+    "name_ko": "현대백화점",
+    "market": "KOSPI",
+    "sector": "유통"
+  },
+  {
+    "ticker": "030200",
+    "name_en": "KT",
+    "name_ko": "KT",
+    "market": "KOSPI",
+    "sector": "통신"
+  },
+  {
+    "ticker": "032350",
+    "name_en": "Lotte Tour Development",
+    "name_ko": "롯데관광개발",
+    "market": "KOSPI",
+    "sector": "관광"
+  },
+  {
+    "ticker": "032640",
+    "name_en": "LG Uplus",
+    "name_ko": "LG유플러스",
+    "market": "KOSPI",
+    "sector": "통신"
+  },
+  {
+    "ticker": "032830",
+    "name_en": "Samsung Life Insurance",
+    "name_ko": "삼성생명",
+    "market": "KOSPI",
+    "sector": "보험"
+  },
+  {
+    "ticker": "033270",
+    "name_en": "Yuhan Corporation",
+    "name_ko": "유한양행",
+    "market": "KOSPI",
+    "sector": "제약"
+  },
+  {
+    "ticker": "033780",
+    "name_en": "KT&G",
+    "name_ko": "KT&G",
+    "market": "KOSPI",
+    "sector": "담배"
+  },
+  {
+    "ticker": "034020",
+    "name_en": "Doosan Corporation",
+    "name_ko": "두산",
+    "market": "KOSPI",
+    "sector": "중공업"
+  },
+  {
+    "ticker": "034730",
+    "name_en": "SK",
+    "name_ko": "SK",
+    "market": "KOSPI",
+    "sector": "에너지"
+  },
+  {
+    "ticker": "035250",
+    "name_en": "Kangwon Land",
+    "name_ko": "강원랜드",
+    "market": "KOSPI",
+    "sector": "레저"
+  },
+  {
+    "ticker": "035420",
+    "name_en": "NAVER",
+    "name_ko": "네이버",
+    "market": "KOSPI",
+    "sector": "IT서비스"
+  },
+  {
+    "ticker": "035720",
+    "name_en": "Kakao",
+    "name_ko": "카카오",
+    "market": "KOSPI",
+    "sector": "IT서비스"
+  },
+  {
+    "ticker": "035760",
+    "name_en": "CJ ENM",
+    "name_ko": "CJ ENM",
+    "market": "KOSPI",
+    "sector": "엔터테인먼트"
+  },
+  {
+    "ticker": "035900",
+    "name_en": "JYP Entertainment",
+    "name_ko": "JYP엔터테인먼트",
+    "market": "KOSDAQ",
+    "sector": "엔터테인먼트"
+  },
+  {
+    "ticker": "036460",
+    "name_en": "Korea Gas Corporation",
+    "name_ko": "한국가스공사",
+    "market": "KOSPI",
+    "sector": "가스"
+  },
+  {
+    "ticker": "036570",
+    "name_en": "NCsoft",
+    "name_ko": "엔씨소프트",
+    "market": "KOSPI",
+    "sector": "게임"
+  },
+  {
+    "ticker": "037270",
+    "name_en": "Yungjin Pharm",
+    "name_ko": "영진약품",
+    "market": "KOSDAQ",
+    "sector": "제약"
+  },
+  {
+    "ticker": "039130",
+    "name_en": "HD Hyundai",
+    "name_ko": "HD현대",
+    "market": "KOSPI",
+    "sector": "조선"
+  },
+  {
+    "ticker": "042660",
+    "name_en": "Daewoo Shipbuilding",
+    "name_ko": "대우조선해양",
+    "market": "KOSPI",
+    "sector": "조선"
+  },
+  {
+    "ticker": "047810",
+    "name_en": "Korea Aerospace Industries",
+    "name_ko": "한국항공우주산업",
+    "market": "KOSPI",
+    "sector": "항공"
+  },
+  {
+    "ticker": "051900",
+    "name_en": "LG Household & Health Care",
+    "name_ko": "LG생활건강",
+    "market": "KOSPI",
+    "sector": "화장품"
+  },
+  {
+    "ticker": "051910",
+    "name_en": "LG Chem",
+    "name_ko": "LG화학",
+    "market": "KOSPI",
+    "sector": "화학"
+  },
+  {
+    "ticker": "052690",
+    "name_en": "Hanwha Techwin",
+    "name_ko": "한화테크윈",
+    "market": "KOSPI",
+    "sector": "방산"
+  },
+  {
+    "ticker": "055550",
+    "name_en": "Shinhan Financial Group",
+    "name_ko": "신한지주",
+    "market": "KOSPI",
+    "sector": "금융"
+  },
+  {
+    "ticker": "067280",
+    "name_en": "Merck Korea",
+    "name_ko": "멕크론코리아",
+    "market": "KOSDAQ",
+    "sector": "제약"
+  },
+  {
+    "ticker": "068270",
+    "name_en": "Celltrion",
+    "name_ko": "셀트리온",
+    "market": "KOSDAQ",
+    "sector": "바이오"
+  },
+  {
+    "ticker": "086790",
+    "name_en": "Hana Financial Group",
+    "name_ko": "하나금융지주",
+    "market": "KOSPI",
+    "sector": "금융"
+  },
+  {
+    "ticker": "096770",
+    "name_en": "SK Innovation",
+    "name_ko": "SK이노베이션",
+    "market": "KOSPI",
+    "sector": "에너지"
+  },
+  {
+    "ticker": "105560",
+    "name_en": "KB Financial Group",
+    "name_ko": "KB금융",
+    "market": "KOSPI",
+    "sector": "금융"
+  },
+  {
+    "ticker": "128940",
+    "name_en": "Han Mi Pharm",
+    "name_ko": "한미약품",
+    "market": "KOSDAQ",
+    "sector": "제약"
+  },
+  {
+    "ticker": "161390",
+    "name_en": "Hanon Systems",
+    "name_ko": "한온시스템",
+    "market": "KOSPI",
+    "sector": "자동차부품"
+  },
+  {
+    "ticker": "207940",
+    "name_en": "Samsung Biologics",
+    "name_ko": "삼성바이오로직스",
+    "market": "KOSPI",
+    "sector": "바이오"
+  },
+  {
+    "ticker": "214450",
+    "name_en": "Celltrion Healthcare",
+    "name_ko": "셀트리온헬스케어",
+    "market": "KOSDAQ",
+    "sector": "바이오"
+  },
+  {
+    "ticker": "251270",
+    "name_en": "Netmarble",
+    "name_ko": "넷마블",
+    "market": "KOSDAQ",
+    "sector": "게임"
+  },
+  {
+    "ticker": "259960",
+    "name_en": "Krafton",
+    "name_ko": "크래프톤",
+    "market": "KOSPI",
+    "sector": "게임"
+  },
+  {
+    "ticker": "326030",
+    "name_en": "SK Biopharmaceuticals",
+    "name_ko": "SK바이오팜",
+    "market": "KOSDAQ",
+    "sector": "바이오"
+  }
+]

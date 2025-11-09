@@ -67,6 +67,68 @@ import traceback
 import yfinance as yf
 import requests
 import uuid
+import urllib.parse
+import json
+from pathlib import Path
+
+# ================================
+# JSON 데이터 로더
+# ================================
+
+def load_korean_stocks():
+    """한국 주식 데이터 JSON 파일 로드"""
+    data_dir = Path(__file__).parent / 'data'
+    json_file = data_dir / 'korean_stocks.json'
+    
+    if not json_file.exists():
+        logger.warning(f"Korean stocks JSON file not found: {json_file}, using fallback")
+        return {}
+    
+    try:
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # JSON 배열을 딕셔너리로 변환: {ticker: (name_en, name_ko)}
+        korean_stocks = {}
+        for stock in data:
+            ticker = stock.get('ticker', '')
+            name_en = stock.get('name_en', '')
+            name_ko = stock.get('name_ko', '')
+            if ticker:
+                korean_stocks[ticker] = (name_en, name_ko)
+        
+        logger.info(f"Loaded {len(korean_stocks)} Korean stocks from JSON")
+        return korean_stocks
+    except Exception as e:
+        logger.error(f"Failed to load Korean stocks JSON: {e}")
+        return {}
+
+def load_us_stocks():
+    """미국 주식/ETF 데이터 JSON 파일 로드"""
+    data_dir = Path(__file__).parent / 'data'
+    json_file = data_dir / 'us_stocks.json'
+    
+    if not json_file.exists():
+        logger.warning(f"US stocks JSON file not found: {json_file}, using fallback")
+        return {}
+    
+    try:
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # JSON 배열을 딕셔너리로 변환: {symbol: name}
+        us_stocks = {}
+        for stock in data:
+            symbol = stock.get('symbol', '')
+            name = stock.get('name', '')
+            if symbol:
+                us_stocks[symbol] = name
+        
+        logger.info(f"Loaded {len(us_stocks)} US stocks/ETFs from JSON")
+        return us_stocks
+    except Exception as e:
+        logger.error(f"Failed to load US stocks JSON: {e}")
+        return {}
 
 # ================================
 # ================================
@@ -964,113 +1026,205 @@ def get_batch_prices_endpoint():
 @app.route('/api/portfolio/stock/search', methods=['GET'])  # Spring Boot 호환성
 def search_stocks_advanced():
     """
-    주식 검색 API (한국 + 미국)
+    주식 검색 API (한국 + 미국 + ETF)
+    
+    검색 폴백 순서:
+    1. 로컬 DB 검색 (한국 주식 80개+, 미국 주식 60개+, ETF 30개)
+    2. Alpha Vantage API 검색 (모든 미국 주식/ETF, 타임아웃 10초)
+    3. yfinance Fallback
+       - 한국 주식: 6자리 코드 자동 인식 → .KS/.KQ 자동 추가
+       - 미국 주식: 심볼만으로 조회
  
- Query Parameters:
- q: ()
+    Query Parameters:
+        q: 검색어 (티커 코드, 영문명, 한글명)
  
- Response:
- [
- {
- "ticker": "005930.KS",
- "name": "Samsung Electronics",
- "exchange": "KRX"
- },
- ...
-    ]
+    Response:
+        [
+            {
+                "ticker": "005930.KS",
+                "name": "삼성전자",
+                "exchange": "KRX",
+                "source": "local" | "alphavantage" | "yfinance"
+            },
+            ...
+        ]
     """
     try:
-        query = request.args.get('q', '').upper()
+        # 원본 쿼리 유지 (한글 검색 지원)
+        query_original = request.args.get('q', '').strip()
+        query_upper = query_original.upper()  # 대문자 변환은 검색에만 사용
         
-        if not query or len(query) < 1:
+        if not query_original or len(query_original) < 1:
             return jsonify([])
         
         results = []
         
-        # 한국 주식 검색
-        korean_stocks = {
- # '005930': 'Samsung Electronics',
- '000660': 'SK Hynix',
- '035420': 'NAVER',
- '035720': 'Kakao',
- '051910': 'LG Chem',
- '006400': 'Samsung SDI',
- '005380': 'Hyundai Motor',
- '012330': 'Hyundai Mobis',
- '028260': 'Samsung C&T',
- 
- # /'068270': 'Celltrion',
- '207940': 'Samsung Biologics',
- '326030': 'SK Biopharmaceuticals',
- '128940': 'Han Mi Pharm',
- '214450': 'Celltrion Healthcare',
- 
- # IT/'251270': 'Netmarble',
- '036570': 'NCsoft',
- '259960': 'Krafton',
- '018260': 'Samsung SDS',
- '035900': 'JYP Entertainment',
- 
- # '055550': 'Shinhan Financial Group',
- '086790': 'Hana Financial Group',
- '105560': 'KB Financial Group',
- '032830': 'Samsung Life Insurance',
- 
- # /'015760': 'Korea Electric Power',
- '010950': 'S-Oil',
- '009540': 'Korea Gas',
- '034730': 'SK',
- 
- # '017670': 'SK Telecom',
- '030200': 'KT',
- '032640': 'LG Uplus',
- 
- # /'000270': 'Kia',
- '161390': 'Hanon Systems',
- 
- # /'005490': 'POSCO',
- '096770': 'SK Innovation',
- '010130': 'Korea Zinc',
- 
- # '033780': 'KT&G',
- '003550': 'LG',
- '018880': 'Samsung Securities',
-            '000720': 'Hyundai Engineering & Construction'
+        # 한국 주식 검색 (한글 이름 포함) - JSON 파일에서 로드
+        korean_stocks = load_korean_stocks()
+        
+        # JSON 파일이 없거나 비어있으면 fallback 데이터 사용
+        if not korean_stocks:
+            logger.warning("Using fallback Korean stocks data")
+            korean_stocks = {
+                # 대형주 (Large Cap)
+                '005930': ('Samsung Electronics', '삼성전자'),
+            '000660': ('SK Hynix', 'SK하이닉스'),
+            '035420': ('NAVER', '네이버'),
+            '035720': ('Kakao', '카카오'),
+            '051910': ('LG Chem', 'LG화학'),
+            '006400': ('Samsung SDI', '삼성SDI'),
+            '005380': ('Hyundai Motor', '현대자동차'),
+            '012330': ('Hyundai Mobis', '현대모비스'),
+            '028260': ('Samsung C&T', '삼성물산'),
+            '000270': ('Kia Corporation', '기아'),
+            '005490': ('POSCO Holdings', 'POSCO홀딩스'),
+            '003550': ('LG', 'LG'),
+            '034730': ('SK', 'SK'),
+            
+            # 제약/바이오 (Pharma/Bio)
+            '207940': ('Samsung Biologics', '삼성바이오로직스'),
+            '326030': ('SK Biopharmaceuticals', 'SK바이오팜'),
+            '128940': ('Han Mi Pharm', '한미약품'),
+            '214450': ('Celltrion Healthcare', '셀트리온헬스케어'),
+            '068270': ('Celltrion', '셀트리온'),
+            '251270': ('Netmarble', '넷마블'),
+            '067280': ('Merck Korea', '멕크론코리아'),
+            '003670': ('Posco Future M', '포스코퓨처엠'),
+            
+            # IT/게임 (Tech/Gaming)
+            '036570': ('NCsoft', '엔씨소프트'),
+            '259960': ('Krafton', '크래프톤'),
+            '018260': ('Samsung SDS', '삼성SDS'),
+            '035900': ('JYP Entertainment', 'JYP엔터테인먼트'),
+            '035760': ('CJ ENM', 'CJ ENM'),
+            '011200': ('HMM', 'HMM'),
+            '028300': ('HLB', 'HLB'),
+            '006260': ('LS', 'LS'),
+            
+            # 금융 (Finance)
+            '086790': ('Hana Financial Group', '하나금융지주'),
+            '105560': ('KB Financial Group', 'KB금융'),
+            '055550': ('Shinhan Financial Group', '신한지주'),
+            '032830': ('Samsung Life Insurance', '삼성생명'),
+            '018880': ('Samsung Securities', '삼성증권'),
+            '006360': ('GS', 'GS'),
+            '000120': ('CJ', 'CJ'),
+            '000150': ('Doosan', '두산'),
+            
+            # 통신 (Telecom)
+            '017670': ('SK Telecom', 'SK텔레콤'),
+            '030200': ('KT', 'KT'),
+            '032640': ('LG Uplus', 'LG유플러스'),
+            
+            # 에너지/화학 (Energy/Chemical)
+            '010950': ('S-Oil', 'S-Oil'),
+            '009540': ('Korea Gas', '한국가스공사'),
+            '096770': ('SK Innovation', 'SK이노베이션'),
+            '010130': ('Korea Zinc', '한국아연'),
+            '015760': ('Korea Electric Power', '한국전력'),
+            '011780': ('Korea Gas Corporation', '한국가스공사'),
+            '002380': ('KCC', 'KCC'),
+            '003230': ('Samyang Holdings', '삼양홀딩스'),
+            
+            # 자동차/부품 (Auto/Parts)
+            '161390': ('Hanon Systems', '한온시스템'),
+            '000720': ('Hyundai Engineering & Construction', '현대건설'),
+            '012450': ('Hanwha Aerospace', '한화에어로스페이스'),
+            '009830': ('Hanwha Solutions', '한화솔루션'),
+            
+            # 소비재/유통 (Consumer/Retail)
+            '033780': ('KT&G', 'KT&G'),
+            '028150': ('GS Retail', 'GS리테일'),
+            '004020': ('Hyundai Steel', '현대제철'),
+            '002790': ('Amorepacific', '아모레퍼시픽'),
+            
+            # 기타 (Others)
+            '009150': ('Samsung Electro-Mechanics', '삼성전기'),
+            '006800': ('Mirae Asset Securities', '미래에셋증권'),
+            '003520': ('Yungjin Pharm', '영진약품'),
+            '004170': ('Shinsegae', '신세계'),
+            '001570': ('Kumho Tire', '금호타이어'),
+            '007310': ('Ottogi', '오뚜기'),
+            '002310': ('Asia Paper', '아세아제지'),
+            '005830': ('DB Insurance', 'DB손해보험'),
+            '005940': ('NH Investment & Securities', 'NH투자증권'),
+            '006370': ('Doosan Heavy Industries', '두산중공업'),
+            '008770': ('Hotel Shilla', '호텔신라'),
+            '010140': ('Samsung Fire & Marine', '삼성화재'),
+            '011070': ('LG Innotek', 'LG이노텍'),
+            '016360': ('Samsung Securities', '삼성증권'),
+            '017800': ('Hyundai Elevator', '현대엘리베이터'),
+            '020150': ('Iljin Materials', '일진머티리얼즈'),
+            '023530': ('Lotte Chemical', '롯데케미칼'),
+            '024110': ('Heungkuk Fire & Marine', '흥국화재'),
+            '028050': ('Samsung C&T', '삼성물산'),
+            '029780': ('Samsung Card', '삼성카드'),
+            '030000': ('Hyundai Department Store', '현대백화점'),
+            '032350': ('Lotte Tour Development', '롯데관광개발'),
+            '033270': ('Yuhan Corporation', '유한양행'),
+            '034020': ('Doosan Corporation', '두산'),
+            '035250': ('Kangwon Land', '강원랜드'),
+            '036460': ('Korea Gas Corporation', '한국가스공사'),
+            '037270': ('Yungjin Pharm', '영진약품'),
+            '039130': ('HD Hyundai', 'HD현대'),
+            '042660': ('Daewoo Shipbuilding', '대우조선해양'),
+            '047810': ('Korea Aerospace Industries', '한국항공우주산업'),
+            '051900': ('LG Household & Health Care', 'LG생활건강'),
+            '052690': ('Hanwha Techwin', '한화테크윈')
         }
         
-        # 한국 주식 검색 루프
-        for code, name in korean_stocks.items():
-            if query in code or query in name.upper():
+        # 한국 주식 검색 루프 (한글 이름 검색 지원)
+        for code, (name_en, name_ko) in korean_stocks.items():
+            # 티커 코드, 영문 이름, 한글 이름 모두 검색
+            if (query_upper in code or 
+                query_upper in name_en.upper() or 
+                query_original in name_ko):
                 ticker = f"{code}.KS"
+                # 한글 이름이 있으면 한글 이름 사용, 없으면 영문 이름
+                display_name = name_ko if name_ko else name_en
                 try:
                     price_data = get_stock_price(ticker)
                     if price_data and price_data.get('success'):
                         price_info = price_data.get('data', {})
                         results.append({
                             'ticker': ticker,
-                            'name': name,
+                            'name': display_name,
+                            'nameEn': name_en,
+                            'nameKo': name_ko,
                             'exchange': 'KRX',
                             'currentPrice': price_info.get('currentPrice', 0),
                             'currency': price_info.get('currency', 'KRW'),
                             'changePercent': price_info.get('changePercent', '0%'),
-                            'changeAmount': price_info.get('changeAmount', 0)
+                            'changeAmount': price_info.get('changeAmount', 0),
+                            'source': 'local'
                         })
                     else:
                         results.append({
                             'ticker': ticker,
-                            'name': name,
-                            'exchange': 'KRX'
+                            'name': display_name,
+                            'nameEn': name_en,
+                            'nameKo': name_ko,
+                            'exchange': 'KRX',
+                            'source': 'local'
                         })
                 except Exception as e:
                     logger.debug(f"Price fetch failed for {ticker}: {str(e)}")
                     results.append({
                         'ticker': ticker,
-                        'name': name,
-                        'exchange': 'KRX'
+                        'name': display_name,
+                        'nameEn': name_en,
+                        'nameKo': name_ko,
+                        'exchange': 'KRX',
+                        'source': 'local'
                     })
         
-        # 미국 주식 데이터베이스
-        us_stocks = {
+        # 미국 주식 데이터베이스 (주식 + ETF) - JSON 파일에서 로드
+        us_stocks = load_us_stocks()
+        
+        # JSON 파일이 없거나 비어있으면 fallback 데이터 사용
+        if not us_stocks:
+            logger.warning("Using fallback US stocks data")
+            us_stocks = {
             # Tech Giants
             'AAPL': 'Apple Inc.',
             'MSFT': 'Microsoft Corporation',
@@ -1133,12 +1287,44 @@ def search_stocks_advanced():
             # Industrial
             'BA': 'Boeing Company',
             'CAT': 'Caterpillar Inc.',
-            'GE': 'General Electric'
+            'GE': 'General Electric',
+            
+            # 주요 ETF (Major ETFs)
+            'SPY': 'SPDR S&P 500 ETF Trust',
+            'QQQ': 'Invesco QQQ Trust',
+            'VOO': 'Vanguard S&P 500 ETF',
+            'VTI': 'Vanguard Total Stock Market ETF',
+            'IWM': 'iShares Russell 2000 ETF',
+            'DIA': 'SPDR Dow Jones Industrial Average ETF',
+            'VEA': 'Vanguard FTSE Developed Markets ETF',
+            'VWO': 'Vanguard FTSE Emerging Markets ETF',
+            'BND': 'Vanguard Total Bond Market ETF',
+            'GLD': 'SPDR Gold Trust',
+            'SLV': 'iShares Silver Trust',
+            'USO': 'United States Oil Fund',
+            'TLT': 'iShares 20+ Year Treasury Bond ETF',
+            'HYG': 'iShares iBoxx $ High Yield Corporate Bond ETF',
+            'XLF': 'Financial Select Sector SPDR Fund',
+            'XLK': 'Technology Select Sector SPDR Fund',
+            'XLE': 'Energy Select Sector SPDR Fund',
+            'XLV': 'Health Care Select Sector SPDR Fund',
+            'XLI': 'Industrial Select Sector SPDR Fund',
+            'XLP': 'Consumer Staples Select Sector SPDR Fund',
+            'XLY': 'Consumer Discretionary Select Sector SPDR Fund',
+            'XLB': 'Materials Select Sector SPDR Fund',
+            'XLU': 'Utilities Select Sector SPDR Fund',
+            'XLC': 'Communication Services Select Sector SPDR Fund',
+            'XRE': 'Real Estate Select Sector SPDR Fund',
+            'ARKK': 'ARK Innovation ETF',
+            'ARKQ': 'ARK Autonomous Technology & Robotics ETF',
+            'ARKG': 'ARK Genomic Revolution ETF',
+            'ARKW': 'ARK Next Generation Internet ETF',
+            'ARKF': 'ARK Fintech Innovation ETF'
         }
         
         # 미국 주식 검색 루프
         for ticker, name in us_stocks.items():
-            if query in ticker or query in name.upper():
+            if query_upper in ticker or query_upper in name.upper():
                 if not any(r['ticker'] == ticker for r in results):
                     # Determine exchange based on ticker
                     exchange = 'NYSE' if ticker in ['BRK.B', 'JPM', 'V', 'BAC', 'WMT', 'JNJ', 'PG', 'KO', 'PEP', 'XOM', 'CVX', 'BA', 'CAT', 'GE'] else 'NASDAQ'
@@ -1153,63 +1339,161 @@ def search_stocks_advanced():
                                 'currentPrice': price_info.get('currentPrice', 0),
                                 'currency': price_info.get('currency', 'USD'),
                                 'changePercent': price_info.get('changePercent', '0%'),
-                                'changeAmount': price_info.get('changeAmount', 0)
+                                'changeAmount': price_info.get('changeAmount', 0),
+                                'source': 'local'
                             })
                         else:
                             results.append({
                                 'ticker': ticker,
                                 'name': name,
-                                'exchange': exchange
+                                'exchange': exchange,
+                                'source': 'local'
                             })
                     except Exception as e:
                         logger.debug(f"Price fetch failed for {ticker}: {str(e)}")
                         results.append({
                             'ticker': ticker,
                             'name': name,
-                            'exchange': exchange
+                            'exchange': exchange,
+                            'source': 'local'
                         })
         
-        # Alpha Vantage API (외부 데이터베이스)
-        if len(results) == 0:
-            try:
-                logger.info(f"Searching Alpha Vantage for: {query}")
-                av_url = f'https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey={ALPHA_VANTAGE_KEY}'
-                av_response = requests.get(av_url, timeout=5)
-                av_data = av_response.json()
+        # Alpha Vantage API - 모든 미국 주식/ETF 검색 (항상 실행)
+        # 로컬 결과가 있어도 미국 주식/ETF는 Alpha Vantage에서 추가 검색
+        try:
+            logger.info(f"Searching Alpha Vantage for: {query_original}")
+            # URL 인코딩으로 한글 및 특수문자 지원
+            encoded_query = urllib.parse.quote(query_original)
+            av_url = f'https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={encoded_query}&apikey={ALPHA_VANTAGE_KEY}'
+            av_response = requests.get(av_url, timeout=10)  # 타임아웃 10초로 증가
+            av_data = av_response.json()
+            
+            # Alpha Vantage 결과 처리
+            for match in av_data.get('bestMatches', []):
+                ticker = match.get('1. symbol', '')
+                name = match.get('2. name', '')
+                asset_type = match.get('3. type', '')
+                region = match.get('4. region', 'Unknown')
+                match_score = match.get('9. matchScore', '0')
                 
-                for match in av_data.get('bestMatches', [])[:10]:
-                    ticker = match.get('1. symbol', '')
-                    name = match.get('2. name', '')
-                    region = match.get('4. region', 'Unknown')
-                    match_score = match.get('9. matchScore', '0')
+                # 매치 스코어 0.5 이상만 추가
+                if float(match_score) >= 0.5:
+                    # 중복 체크 (이미 로컬 결과에 있는지 확인)
+                    if not any(r.get('ticker') == ticker for r in results):
+                        # 미국 주식/ETF만 추가 (한국 주식은 이미 로컬에서 처리)
+                        if region == 'United States' or 'US' in region or ticker.endswith('.US'):
+                            # Exchange 정보 추출
+                            exchange = 'NASDAQ'
+                            if 'NYSE' in name or 'New York' in name:
+                                exchange = 'NYSE'
+                            elif 'NASDAQ' in name:
+                                exchange = 'NASDAQ'
+                            
+                            results.append({
+                                'ticker': ticker,
+                                'name': name,
+                                'exchange': exchange,
+                                'type': asset_type,  # Equity, ETF 등
+                                'region': region,
+                                'source': 'alphavantage'
+                            })
+            
+            us_results_count = len([r for r in results if r.get('region') == 'United States'])
+            logger.info(f"Alpha Vantage found {us_results_count} US results")
+            
+        except requests.exceptions.Timeout:
+            logger.warning("Alpha Vantage API timeout (10초 초과) - yfinance fallback으로 전환")
+        except requests.exceptions.RequestException as re:
+            logger.warning(f"Alpha Vantage API connection error: {str(re)} - yfinance fallback으로 전환")
+        except Exception as e:
+            logger.warning(f"Alpha Vantage API error: {str(e)} - yfinance fallback으로 전환")
+        
+        # yfinance Fallback - 한국 주식 및 미국 주식 검색
+        # 폴백 순서: 로컬 DB → Alpha Vantage → yfinance
+        if len(results) < 10:
+            try:
+                # 1. 한국 주식 검색 시도 (6자리 코드 자동 인식)
+                if query_original.isdigit() and len(query_original) == 6:
+                    logger.info(f"Detected 6-digit Korean stock code: {query_original}, trying .KS and .KQ suffixes")
+                    found_korean = False
                     
-                    # 매치 스코어 0.5 이상만 추가
-                    if float(match_score) >= 0.5:
-                        results.append({
-                            'ticker': ticker,
-                            'name': name,
-                            'exchange': region
-                        })
+                    # .KS (KOSPI) 먼저 시도, 실패하면 .KQ (KOSDAQ) 시도
+                    for suffix in ['.KS', '.KQ']:
+                        try:
+                            ticker = f"{query_original}{suffix}"
+                            logger.debug(f"Trying yfinance lookup for {ticker}")
+                            stock = yf.Ticker(ticker)
+                            info = stock.info
+                            
+                            # yfinance가 유효한 정보를 반환하는지 확인
+                            if info and isinstance(info, dict) and 'longName' in info and info.get('longName'):
+                                # 중복 체크
+                                if not any(r.get('ticker') == ticker for r in results):
+                                    results.append({
+                                        'ticker': ticker,
+                                        'name': info.get('longName', query_original),
+                                        'exchange': 'KRX',
+                                        'source': 'yfinance',
+                                        'market': 'KOSPI' if suffix == '.KS' else 'KOSDAQ'
+                                    })
+                                    logger.info(f"✅ Found Korean stock via yfinance: {ticker} - {info.get('longName')}")
+                                    found_korean = True
+                                    break
+                        except KeyError as ke:
+                            # yfinance가 해당 티커를 찾지 못한 경우
+                            logger.debug(f"yfinance: {query_original}{suffix} not found: {str(ke)}")
+                            continue
+                        except Exception as e:
+                            # 기타 에러 (네트워크, 타임아웃 등)
+                            logger.debug(f"yfinance lookup error for {query_original}{suffix}: {str(e)}")
+                            continue
+                    
+                    # 한국 주식을 찾았으면 미국 주식 검색 건너뛰기
+                    if found_korean:
+                        logger.info("Korean stock found via yfinance, skipping US stock lookup")
+                        # 최대 10개 결과만 반환
+                        return jsonify(results[:10])
                 
-                logger.info(f"Alpha Vantage found {len(results)} results")
-                
-            except requests.exceptions.Timeout:
-                logger.warning("Alpha Vantage API timeout")
-            except Exception as e:
-                logger.warning(f"Alpha Vantage API error: {str(e)}")
-            # Fallback to yfinance
-            try:
-                stock = yf.Ticker(query)
-                info = stock.info
-                
-                if info and 'longName' in info:
-                    results.append({
-                        'ticker': query,
-                        'name': info.get('longName', query),
-                        'exchange': info.get('exchange', 'UNKNOWN')
-                    })
+                # 2. 미국 주식 검색 시도 (심볼만으로 조회)
+                # 한국 주식 코드가 아니거나, 한국 주식을 찾지 못한 경우
+                if not (query_original.isdigit() and len(query_original) == 6):
+                    try:
+                        logger.debug(f"Trying yfinance lookup for US stock: {query_original}")
+                        stock = yf.Ticker(query_original.upper())
+                        info = stock.info
+                        
+                        # yfinance가 유효한 정보를 반환하는지 확인
+                        if info and isinstance(info, dict) and 'longName' in info and info.get('longName'):
+                            ticker = query_original.upper()
+                            # 중복 체크
+                            if not any(r.get('ticker') == ticker for r in results):
+                                # Exchange 정보 추출
+                                exchange = info.get('exchange', 'UNKNOWN')
+                                if 'NASDAQ' in exchange:
+                                    exchange = 'NASDAQ'
+                                elif 'NYSE' in exchange or 'New York' in exchange:
+                                    exchange = 'NYSE'
+                                
+                                results.append({
+                                    'ticker': ticker,
+                                    'name': info.get('longName', query_original),
+                                    'exchange': exchange,
+                                    'source': 'yfinance',
+                                    'type': info.get('quoteType', 'EQUITY')  # ETF인지 주식인지
+                                })
+                                logger.info(f"✅ Found US stock via yfinance: {ticker} - {info.get('longName')}")
+                    except KeyError as ke:
+                        # yfinance가 해당 티커를 찾지 못한 경우
+                        logger.debug(f"yfinance: {query_original} not found: {str(ke)}")
+                    except Exception as yf_error:
+                        # 기타 에러 (네트워크, 타임아웃 등)
+                        logger.warning(f"yfinance lookup failed for {query_original}: {str(yf_error)}")
+                        # 에러가 발생해도 기존 결과는 반환
+                        
             except Exception as yf_error:
-                logger.debug(f"yfinance lookup also failed: {str(yf_error)}")
+                # 최상위 예외 처리 (예상치 못한 에러)
+                logger.warning(f"yfinance fallback error: {str(yf_error)}")
+                # 에러가 발생해도 기존 결과는 반환
         
         # 최대 10개 결과만 반환
         return jsonify(results[:10])

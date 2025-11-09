@@ -27,18 +27,35 @@ export const optimizePortfolioWithWeights = async (inputData) => {
     console.log('[DEBUG] Calling Flask directly (bypassing Backend)');
     console.log('[DEBUG] Request data:', inputData);
     
-    // Flask로 직접 요청 (임시 해결책)
-    const response = await axios.post('http://localhost:5000/api/optimize/with-weights', {
+    // Flask로 직접 요청 - Qiskit QAOA 양자 최적화
+    // ✅ method를 'quantum'으로 강제하여 Qiskit QAOA 사용 보장
+    const method = inputData.method || 'quantum';
+    
+    if (method !== 'quantum') {
+      console.warn('[portfolioApi] ⚠️ Method is not "quantum", forcing to quantum for Qiskit QAOA');
+    }
+    
+    console.log('[portfolioApi] 🚀 Calling Flask API for Qiskit QAOA optimization');
+    console.log('[portfolioApi] Method:', method);
+    console.log('[portfolioApi] Tickers:', inputData.tickers);
+    console.log('[portfolioApi] Reps (QAOA layers):', inputData.reps || 1);
+    console.log('[portfolioApi] Precision (bits per asset):', inputData.precision || 4);
+    
+    // Flask 서버 URL (환경 변수 또는 기본값)
+    const FLASK_URL = import.meta.env.VITE_PYTHON_BACKEND_URL || import.meta.env.VITE_FLASK_URL || 'http://localhost:5000';
+    console.log('[portfolioApi] Flask URL:', FLASK_URL);
+    
+    const response = await axios.post(`${FLASK_URL}/api/optimize/with-weights`, {
       tickers: inputData.tickers,
       initial_weights: inputData.initialWeights || inputData.weights,
       risk_factor: inputData.riskFactor || 0.5,
-      method: inputData.method || 'quantum',
+      method: 'quantum',  // ✅ Qiskit QAOA 강제
       period: inputData.period || '1y',
-      reps: inputData.reps || 1,
-      precision: inputData.precision || 4,
-      fast_mode: true
+      reps: inputData.reps || 1,  // QAOA layers
+      precision: inputData.precision || 4,  // Binary encoding precision
+      fast_mode: inputData.fast_mode !== false  // Fast mode for QAOA
     }, {
-      timeout: 30000  // 30초 타임아웃 (양자 최적화 시간 고려)
+      timeout: 120000  // 2분 타임아웃 (Qiskit QAOA는 시간이 걸릴 수 있음)
     });
     
     console.log('[SUCCESS] Flask response:', response.data);

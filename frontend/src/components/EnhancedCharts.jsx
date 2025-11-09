@@ -39,14 +39,33 @@ const EnhancedCharts = () => {
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
-        console.log('Loaded optimization data:', parsed);
+        console.log('[EnhancedCharts] 📊 Loaded optimization data from localStorage:', parsed);
+        
+        // 데이터 구조 검증 및 디버깅
+        console.log('[EnhancedCharts] 🔍 Data structure validation:', {
+          hasOriginal: !!parsed.original,
+          hasOptimized: !!parsed.optimized,
+          hasImprovement: !!parsed.improvement,
+          originalTickers: parsed.original?.tickers?.length || 0,
+          optimizedTickers: (parsed.optimized?.tickers || parsed.optimized?.selected_tickers)?.length || 0,
+          originalWeights: parsed.original?.weights?.length || 0,
+          optimizedWeights: parsed.optimized?.weights?.length || 0,
+          originalExpectedReturn: parsed.original?.expected_return,
+          optimizedExpectedReturn: parsed.optimized?.expected_return,
+          originalRisk: parsed.original?.risk,
+          optimizedRisk: parsed.optimized?.risk,
+          originalSharpe: parsed.original?.sharpe_ratio,
+          optimizedSharpe: parsed.optimized?.sharpe_ratio
+        });
+        
         setOptimizationData(parsed);
         setHasData(true);
       } catch (e) {
-        console.error('Failed to parse optimization data:', e);
+        console.error('[EnhancedCharts] ❌ Failed to parse optimization data:', e);
         setHasData(false);
       }
     } else {
+      console.warn('[EnhancedCharts] ⚠️ No optimization data found in localStorage');
       setHasData(false);
     }
   }, []);
@@ -89,29 +108,33 @@ const EnhancedCharts = () => {
 
   const { original, optimized, improvement, method, timestamp } = optimizationData;
 
+  // 백엔드 응답 구조에 맞춰 데이터 추출 (tickers 또는 selected_tickers 모두 지원)
+  const optimizedTickers = optimized.tickers || optimized.selected_tickers || [];
+  const originalTickers = original.tickers || [];
+
   // Prepare data for pie charts
-  const originalPieData = original.tickers?.map((ticker, index) => ({
+  const originalPieData = originalTickers.map((ticker, index) => ({
     name: ticker.split('.')[0], // Remove .KS extension
     ticker,
     value: (original.weights[index] || 0) * 100,
-  })) || [];
+  }));
 
-  const optimizedPieData = optimized.selected_tickers?.map((ticker, index) => ({
+  const optimizedPieData = optimizedTickers.map((ticker, index) => ({
     name: ticker.split('.')[0],
     ticker,
     value: (optimized.weights[index] || 0) * 100,
-  })) || [];
+  }));
 
   // Prepare data for bar chart (weight comparison)
-  const weightComparisonData = optimized.selected_tickers?.map((ticker, index) => {
-    const originalIndex = original.tickers?.indexOf(ticker) ?? -1;
+  const weightComparisonData = optimizedTickers.map((ticker, index) => {
+    const originalIndex = originalTickers.indexOf(ticker);
     return {
       name: ticker.split('.')[0],
       ticker,
       original: originalIndex >= 0 ? (original.weights[originalIndex] * 100) : 0,
-      optimized: (optimized.weights[index] * 100),
+      optimized: (optimized.weights[index] || 0) * 100,
     };
-  }) || [];
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
@@ -358,6 +381,180 @@ const EnhancedCharts = () => {
                 <div className="text-xs text-gray-600 mb-1">{t('overallScore')}</div>
                 <div className="text-lg font-bold text-indigo-600">
                   +{improvement.score_improvement?.toFixed(2) || '0.00'}%
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+
+        {/* 상세 분석 섹션 추가 */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-white rounded-2xl shadow-xl p-8 mt-8"
+        >
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">
+            🔍 {language === 'ko' ? '상세 분석' : 'Detailed Analysis'}
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* 리스크 분석 */}
+            <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-6 border-l-4 border-red-500">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                ⚠️ {language === 'ko' ? '리스크 분석' : 'Risk Analysis'}
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '포트폴리오 변동성' : 'Portfolio Volatility'}</span>
+                  <span className="font-bold text-gray-900">{(optimized.risk * 100).toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '최대 낙폭 (Max Drawdown)' : 'Max Drawdown'}</span>
+                  <span className="font-bold text-gray-900">
+                    {optimized.max_drawdown ? (optimized.max_drawdown * 100).toFixed(2) + '%' : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '베타 (시장 대비)' : 'Beta (vs Market)'}</span>
+                  <span className="font-bold text-gray-900">
+                    {optimized.beta ? optimized.beta.toFixed(2) : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? 'VaR (95%)' : 'VaR (95%)'}</span>
+                  <span className="font-bold text-gray-900">
+                    {optimized.var_95 ? (optimized.var_95 * 100).toFixed(2) + '%' : 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 수익성 분석 */}
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-l-4 border-green-500">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                📈 {language === 'ko' ? '수익성 분석' : 'Return Analysis'}
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '연간 예상 수익률' : 'Annual Expected Return'}</span>
+                  <span className="font-bold text-green-700">+{(optimized.expected_return * 100).toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? 'Sortino 비율' : 'Sortino Ratio'}</span>
+                  <span className="font-bold text-green-700">
+                    {optimized.sortino_ratio ? optimized.sortino_ratio.toFixed(3) : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '정보 비율 (IR)' : 'Information Ratio'}</span>
+                  <span className="font-bold text-green-700">
+                    {optimized.information_ratio ? optimized.information_ratio.toFixed(3) : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? 'Calmar 비율' : 'Calmar Ratio'}</span>
+                  <span className="font-bold text-green-700">
+                    {optimized.calmar_ratio ? optimized.calmar_ratio.toFixed(3) : 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 포트폴리오 구성 */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border-l-4 border-blue-500">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                🎯 {language === 'ko' ? '포트폴리오 구성' : 'Portfolio Composition'}
+              </h3>
+              <div className="space-y-2">
+                {(optimized.tickers || optimized.selected_tickers || []).map((ticker, index) => (
+                  <div key={ticker} className="flex justify-between items-center p-2 bg-white rounded">
+                    <span className="text-sm font-medium text-gray-700">{ticker.split('.')[0]}</span>
+                    <span className="text-sm font-bold text-blue-700">
+                      {((optimized.weights[index] || 0) * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                ))}
+                <div className="mt-3 pt-3 border-t border-blue-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-gray-700">{language === 'ko' ? '총 주식 수' : 'Total Stocks'}</span>
+                    <span className="text-sm font-bold text-blue-700">
+                      {(optimized.tickers || optimized.selected_tickers || []).length} {language === 'ko' ? '개' : 'stocks'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 최적화 정보 */}
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border-l-4 border-purple-500">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                ⚡ {language === 'ko' ? '최적화 정보' : 'Optimization Info'}
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '최적화 방법' : 'Optimization Method'}</span>
+                  <span className="font-bold text-purple-700">
+                    {method === 'quantum' ? (language === 'ko' ? 'Qiskit QAOA' : 'Qiskit QAOA') : (language === 'ko' ? '클래식' : 'Classical')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '실행 시간' : 'Execution Time'}</span>
+                  <span className="font-bold text-purple-700">
+                    {optimizationData.execution_time ? `${optimizationData.execution_time.toFixed(2)}s` : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '최적화 점수' : 'Optimization Score'}</span>
+                  <span className="font-bold text-purple-700">
+                    {optimized.score ? optimized.score.toFixed(3) : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{language === 'ko' ? '수렴 여부' : 'Convergence'}</span>
+                  <span className="font-bold text-purple-700">
+                    {optimized.converged ? (language === 'ko' ? '✅ 수렴' : '✅ Converged') : (language === 'ko' ? '⚠️ 미수렴' : '⚠️ Not Converged')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 개선 사항 요약 */}
+          {improvement && (
+            <div className="mt-6 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 border-2 border-indigo-200">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                ✨ {language === 'ko' ? '최적화 개선 사항' : 'Optimization Improvements'}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">{language === 'ko' ? '수익률 개선' : 'Return Improvement'}</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    +{improvement.return_improvement?.toFixed(2) || '0.00'}%
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {language === 'ko' ? '기존 대비 증가' : 'vs Original'}
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">{language === 'ko' ? '리스크 변화' : 'Risk Change'}</div>
+                  <div className={`text-2xl font-bold ${improvement.risk_change <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                    {improvement.risk_change >= 0 ? '+' : ''}{improvement.risk_change?.toFixed(2) || '0.00'}%
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {improvement.risk_change <= 0 
+                      ? (language === 'ko' ? '리스크 감소 ✅' : 'Risk Reduced ✅')
+                      : (language === 'ko' ? '리스크 증가' : 'Risk Increased')}
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">{language === 'ko' ? '샤프 비율 개선' : 'Sharpe Improvement'}</div>
+                  <div className="text-2xl font-bold text-purple-600">
+                    +{improvement.sharpe_improvement?.toFixed(3) || '0.000'}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {language === 'ko' ? '위험 대비 수익 개선' : 'Risk-Adjusted Return'}
+                  </div>
                 </div>
               </div>
             </div>
