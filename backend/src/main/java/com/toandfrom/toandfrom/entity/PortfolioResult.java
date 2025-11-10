@@ -55,6 +55,10 @@ public class PortfolioResult {
     @Column(nullable = false)
     private Boolean autoSaved = false;
     
+    // Visualization path (from Stock-Portfolio-Optimizer)
+    // 시각화 이미지 경로 (Python 스크립트가 생성한 이미지)
+    private String visualizationPath;
+    
     public PortfolioResult() {
         this.createdAt = LocalDateTime.now();
     }
@@ -194,6 +198,14 @@ public class PortfolioResult {
     
     public void setAutoSaved(Boolean autoSaved) {
         this.autoSaved = autoSaved;
+    }
+    
+    public String getVisualizationPath() {
+        return visualizationPath;
+    }
+    
+    public void setVisualizationPath(String visualizationPath) {
+        this.visualizationPath = visualizationPath;
     }
 }
 
