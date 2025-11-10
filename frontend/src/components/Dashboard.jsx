@@ -4,8 +4,20 @@ import { getCurrencySymbol, getCurrencyCode } from '../utils/currencyUtils';
 import StockSearchInput from './StockSearchInput';
 import CurrencyDisplay from './CurrencyDisplay';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import axios from 'axios';
 
 const COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA'];
+
+// 거래소 배지 스타일 (Exchange Badge Styles)
+const EXCHANGE_BADGES = {
+  'NASDAQ': { bg: '#0066cc', text: 'NASDAQ', flag: '🇺🇸' },
+  'NYSE': { bg: '#003d82', text: 'NYSE', flag: '🇺🇸' },
+  'KOSPI': { bg: '#e63946', text: 'KOSPI', flag: '🇰🇷' },
+  'KOSDAQ': { bg: '#f77f00', text: 'KOSDAQ', flag: '🇰🇷' },
+  'KRX': { bg: '#d62828', text: 'KRX', flag: '🇰🇷' },
+  'AMEX': { bg: '#4361ee', text: 'AMEX', flag: '🇺🇸' },
+  'DEFAULT': { bg: '#6c757d', text: 'N/A', flag: '🌐' }
+};
 
 const Dashboard = ({ onNavigate }) => {
   const { t, language } = useLanguage();
@@ -17,6 +29,7 @@ const Dashboard = ({ onNavigate }) => {
   const [portfolio, setPortfolio] = useState([]);
 
   const [currentPrices, setCurrentPrices] = useState({});
+  const [priceLoading, setPriceLoading] = useState({});
   const [totalValue, setTotalValue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
   const [showAddStock, setShowAddStock] = useState(false);
@@ -309,19 +322,76 @@ const Dashboard = ({ onNavigate }) => {
   const handleAddStock = (stock) => {
     const exists = portfolio.some((s) => s.ticker === stock.ticker || s.ticker === stock.symbol);
     if (!exists) {
-      setPortfolio([
-        ...portfolio,
-        {
-          ticker: stock.ticker || stock.symbol,
-          name: stock.name,
-          shares: 0,
-          avgPrice: 0,
-          exchange: stock.exchange || 'NASDAQ',
-        },
-      ]);
+      const newStock = {
+        ticker: stock.ticker || stock.symbol,
+        name: stock.name,
+        shares: 0,
+        avgPrice: 0,
+        exchange: stock.exchange || 'NASDAQ',
+      };
+      
+      setPortfolio([...portfolio, newStock]);
       setShowAddStock(false);
+      
+      // 🚀 새 주식 추가 시 즉시 실시간 가격 조회
+      fetchStockPrice(newStock.ticker);
     }
   };
+
+  // 🚀 실시간 주가 조회 함수
+  const fetchStockPrice = async (ticker) => {
+    if (!ticker) return;
+    
+    try {
+      setPriceLoading(prev => ({ ...prev, [ticker]: true }));
+      console.log(`[Dashboard] 📊 Fetching real-time price for ${ticker}`);
+      
+      // Normalize Korean stock symbols
+      let normalizedTicker = ticker;
+      if (/^\d{6}$/.test(ticker)) {
+        normalizedTicker = `${ticker}.KS`;
+      }
+      
+      const response = await axios.get(`/api/portfolio/stock/price/${normalizedTicker}`);
+      
+      if (response.data.success && response.data.data) {
+        const priceData = response.data.data;
+        const currentPrice = priceData.currentPrice || priceData.price || 0;
+        
+        setCurrentPrices(prev => ({
+          ...prev,
+          [ticker]: currentPrice
+        }));
+        
+        console.log(`[Dashboard] ✅ Price updated for ${ticker}: ${currentPrice}`);
+      }
+    } catch (error) {
+      console.error(`[Dashboard] ❌ Failed to fetch price for ${ticker}:`, error);
+      // Keep using avgPrice as fallback
+    } finally {
+      setPriceLoading(prev => ({ ...prev, [ticker]: false }));
+    }
+  };
+
+  // 🔄 포트폴리오 변경 시 실시간 가격 자동 업데이트
+  useEffect(() => {
+    if (portfolio.length > 0) {
+      console.log('[Dashboard] 🔄 Auto-fetching prices for portfolio');
+      portfolio.forEach(stock => {
+        fetchStockPrice(stock.ticker);
+      });
+      
+      // 60초마다 자동 새로고침
+      const interval = setInterval(() => {
+        console.log('[Dashboard] ⏰ Auto-refreshing stock prices (60s)');
+        portfolio.forEach(stock => {
+          fetchStockPrice(stock.ticker);
+        });
+      }, 60000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [portfolio.map(s => s.ticker).join(',')]);
 
   const updateStock = (index, field, value) => {
     const nextPortfolio = [...portfolio];
@@ -332,6 +402,31 @@ const Dashboard = ({ onNavigate }) => {
   const removeStock = (index) => {
     const nextPortfolio = portfolio.filter((_, i) => i !== index);
     setPortfolio(nextPortfolio);
+  };
+
+  // 🏷️ 거래소 배지 컴포넌트
+  const ExchangeBadge = ({ exchange }) => {
+    const badge = EXCHANGE_BADGES[exchange] || EXCHANGE_BADGES.DEFAULT;
+    return (
+      <span 
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '2px 8px',
+          borderRadius: '12px',
+          backgroundColor: badge.bg,
+          color: 'white',
+          fontSize: '11px',
+          fontWeight: '600',
+          marginLeft: '6px',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        <span>{badge.flag}</span>
+        <span>{badge.text}</span>
+      </span>
+    );
   };
 
   const portfolioDistribution = portfolio
@@ -517,8 +612,31 @@ const Dashboard = ({ onNavigate }) => {
                         <tr key={index}>
                           <td>
                             <div className="stock-cell">
-                              <span className="ticker">{stock.ticker}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                <span className="ticker">{stock.ticker}</span>
+                                <ExchangeBadge exchange={stock.exchange} />
+                                {priceLoading[stock.ticker] && (
+                                  <span style={{ color: '#0066cc', fontSize: '11px', marginLeft: '4px' }}>
+                                    🔄 Loading...
+                                  </span>
+                                )}
+                              </div>
                               <span className="name">{stock.name}</span>
+                              {currentPrices[stock.ticker] && currentPrices[stock.ticker] !== stock.avgPrice && (
+                                <div style={{ 
+                                  fontSize: '11px', 
+                                  color: '#666', 
+                                  marginTop: '2px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  <span>📊 Real-time:</span>
+                                  <span style={{ fontWeight: '600', color: '#0066cc' }}>
+                                    {language === 'ko' ? '₩' : '$'}{currentPrices[stock.ticker].toLocaleString()}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="numeric">

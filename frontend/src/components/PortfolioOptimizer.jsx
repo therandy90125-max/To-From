@@ -256,12 +256,23 @@ export default function PortfolioOptimizer() {
             sharpe_ratio: optimizedData.sharpe_ratio || parsedResult.optimized_metrics.sharpe_ratio || 0,
             optimization_score: optimizedData.optimization_score || 0  // 백엔드에서 반환한 score 추가
           },
-          improvement: parsedResult.improvement,  // improvements가 아닌 improvement로 저장 (Analytics와 일치)
+          improvement: parsedResult.improvement || improvementsData || {},  // improvements가 아닌 improvement로 저장 (Analytics와 일치)
           method: parsedResult.method || 'quantum',
           timestamp: new Date().toISOString()
         };
         
-        // 디버깅: 저장되는 데이터 확인
+        // 디버깅: 백엔드 응답 원본 확인
+        console.log('[PortfolioOptimizer] 📥 Backend response structure:', {
+          hasOriginal: !!result.original,
+          hasOptimized: !!result.optimized,
+          hasImprovements: !!result.improvements,
+          improvements: result.improvements,
+          originalData: originalData,
+          optimizedData: optimizedData,
+          improvementsData: improvementsData
+        });
+        
+        // 디버깅: 저장되는 데이터 확인 및 검증
         console.log('[PortfolioOptimizer] 💾 Saving to localStorage for Analytics:', {
           original: {
             tickers: analyticsData.original.tickers,
@@ -279,6 +290,39 @@ export default function PortfolioOptimizer() {
           },
           improvement: analyticsData.improvement
         });
+        
+        // 백엔드에서 계산한 improvement 값 검증
+        if (analyticsData.improvement && Object.keys(analyticsData.improvement).length > 0) {
+          console.log('[PortfolioOptimizer] ✅ Improvement values from backend:', {
+            return_improvement: analyticsData.improvement.return_improvement,
+            risk_change: analyticsData.improvement.risk_change,
+            sharpe_improvement: analyticsData.improvement.sharpe_improvement,
+            score_improvement: analyticsData.improvement.score_improvement
+          });
+        } else {
+          console.warn('[PortfolioOptimizer] ⚠️ No improvement data found in backend response');
+        }
+        
+        // 데이터 일치성 검증
+        const weightsSumOriginal = analyticsData.original.weights.reduce((sum, w) => sum + w, 0);
+        const weightsSumOptimized = analyticsData.optimized.weights.reduce((sum, w) => sum + w, 0);
+        console.log('[PortfolioOptimizer] ✅ Data validation:', {
+          originalWeightsSum: weightsSumOriginal.toFixed(4),
+          optimizedWeightsSum: weightsSumOptimized.toFixed(4),
+          originalTickersCount: analyticsData.original.tickers.length,
+          optimizedTickersCount: analyticsData.optimized.tickers.length,
+          originalWeightsCount: analyticsData.original.weights.length,
+          optimizedWeightsCount: analyticsData.optimized.weights.length,
+          improvement: analyticsData.improvement
+        });
+        
+        // 경고: 가중치 합이 1.0에 가깝지 않으면 경고
+        if (Math.abs(weightsSumOriginal - 1.0) > 0.01) {
+          console.warn('[PortfolioOptimizer] ⚠️ Original weights sum is not 1.0:', weightsSumOriginal);
+        }
+        if (Math.abs(weightsSumOptimized - 1.0) > 0.01) {
+          console.warn('[PortfolioOptimizer] ⚠️ Optimized weights sum is not 1.0:', weightsSumOptimized);
+        }
         
         localStorage.setItem('lastOptimizationResult', JSON.stringify(analyticsData));
       } else {
@@ -924,16 +968,26 @@ function OriginalVsQuantumView({ originalPortfolio, quantumResult, currencySymbo
           </BarChart>
         </ResponsiveContainer>
 
-        {/* Improvement Summary */}
+        {/* Improvement Summary - 백엔드에서 계산한 값 사용 */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           {comparisonData.map((metric, idx) => {
             const isReturnOrSharpe = idx === 0 || idx === 2;
             const quantumBetter = isReturnOrSharpe
               ? metric.quantum > metric.original
               : metric.quantum < metric.original;
-            const improvement = isReturnOrSharpe
-              ? ((metric.quantum - metric.original) / Math.abs(metric.original || 1)) * 100
-              : ((metric.original - metric.quantum) / Math.abs(metric.original || 1)) * 100;
+            
+            // 백엔드에서 계산한 improvement 값 사용 (재계산하지 않음)
+            let backendImprovement = 0;
+            if (idx === 0) {
+              // Expected Return: 백엔드의 return_improvement 사용
+              backendImprovement = improvement.return_improvement || 0;
+            } else if (idx === 1) {
+              // Risk: 백엔드의 risk_change 사용 (리스크는 감소가 좋으므로 부호 반전)
+              backendImprovement = -(improvement.risk_change || 0);
+            } else if (idx === 2) {
+              // Sharpe Ratio: 백엔드의 sharpe_improvement 사용
+              backendImprovement = improvement.sharpe_improvement || 0;
+            }
 
             return (
               <div
@@ -961,7 +1015,7 @@ function OriginalVsQuantumView({ originalPortfolio, quantumResult, currencySymbo
                 </div>
                 {quantumBetter && (
                   <div className="text-xs text-green-600 mt-1 font-semibold">
-                    {improvement > 0 ? '+' : ''}{improvement.toFixed(1)}% {language === 'ko' ? '개선' : 'improvement'}
+                    {backendImprovement > 0 ? '+' : ''}{backendImprovement.toFixed(1)}% {language === 'ko' ? '개선' : 'improvement'}
                   </div>
                 )}
               </div>

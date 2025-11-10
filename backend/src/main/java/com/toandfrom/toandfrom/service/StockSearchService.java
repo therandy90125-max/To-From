@@ -171,18 +171,45 @@ public class StockSearchService {
     
     /**
      * 한국 주식 검색
+     * 1. 캐시에서 먼저 검색 (빠른 응답)
+     * 2. Flask API 검색 (추가 결과)
+     * 3. yfinance 폴백 (6자리 코드)
      */
     private List<StockSearchResponseDTO> searchKoreanStocks(String query) {
         List<StockSearchResponseDTO> results = new ArrayList<>();
         
-        // Flask API에서 한국 주식 검색
+        // 1. 캐시에서 한국 주식 검색 (이미 searchStocks에서 처리되지만, 여기서도 확인)
+        List<Stock> cachedResults = stockCacheService.searchFromCache(query, "KR");
+        if (!cachedResults.isEmpty()) {
+            log.debug("Found {} Korean stocks from cache", cachedResults.size());
+            for (Stock cached : cachedResults) {
+                StockSearchResponseDTO dto = convertStockToDTO(cached);
+                if (dto != null) {
+                    results.add(dto);
+                }
+            }
+            // 캐시에서 충분한 결과를 찾았으면 Flask API 호출 생략 가능
+            if (results.size() >= 10) {
+                log.info("Found {} Korean stocks from cache, skipping Flask API", results.size());
+                return results.stream().limit(10).collect(Collectors.toList());
+            }
+        }
+        
+        // 2. Flask API에서 한국 주식 검색 (추가 결과)
         try {
             String url = flaskApiUrl + "/api/stocks/search?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
             log.debug("Searching Korean stocks via Flask API: {}", url);
             
+            // 타임아웃 설정 (5초)
+            org.springframework.http.client.SimpleClientHttpRequestFactory factory = 
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(5000);
+            factory.setReadTimeout(5000);
+            RestTemplate timeoutRestTemplate = new RestTemplate(factory);
+            
             @SuppressWarnings("unchecked")
             ResponseEntity<List<Map<String, Object>>> response = 
-                restTemplate.getForEntity(url, (Class<List<Map<String, Object>>>) (Class<?>) List.class);
+                timeoutRestTemplate.getForEntity(url, (Class<List<Map<String, Object>>>) (Class<?>) List.class);
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 List<Map<String, Object>> flaskResults = response.getBody();
@@ -216,24 +243,36 @@ public class StockSearchService {
                     flaskDtos = flaskDtos.stream()
                         .filter(dto -> dto.getMarket() != null && 
                             (dto.getMarket().equals("KRX") || 
+                             dto.getMarket().equals("KR") ||
                              dto.getSymbol().matches("\\d{6}(\\.KS|\\.KQ)")))
                         .collect(Collectors.toList());
                     
-                    log.info("Found {} Korean stocks from Flask API", flaskDtos.size());
-                    return flaskDtos;
+                    // 중복 제거 (이미 캐시에서 찾은 결과와)
+                    Set<String> existingSymbols = results.stream()
+                        .map(StockSearchResponseDTO::getSymbol)
+                        .collect(Collectors.toSet());
+                    
+                    for (StockSearchResponseDTO dto : flaskDtos) {
+                        if (!existingSymbols.contains(dto.getSymbol())) {
+                            results.add(dto);
+                        }
+                    }
+                    
+                    log.info("Found {} Korean stocks from Flask API (total: {})", flaskDtos.size(), results.size());
                 }
             } else {
                 log.warn("Flask API returned non-2xx status: {}", response.getStatusCode());
             }
         } catch (org.springframework.web.client.ResourceAccessException e) {
-            log.warn("Flask API connection failed: {}", e.getMessage());
+            log.warn("Flask API connection failed: {}. Using cache results only.", e.getMessage());
         } catch (Exception e) {
-            log.warn("Flask API search failed: {}", e.getMessage());
+            log.warn("Flask API search failed: {}. Using cache results only.", e.getMessage());
             log.debug("Exception details: ", e);
         }
         
-        // yfinance 폴백: 6자리 코드 자동 변환
-        if (query.matches("\\d{6}")) {
+        // 3. yfinance 폴백: 6자리 코드 자동 변환 (캐시와 Flask API에서 찾지 못한 경우)
+        if (results.isEmpty() && query.matches("\\d{6}")) {
+            log.debug("Trying yfinance fallback for 6-digit code: {}", query);
             List<String> tickers = yFinanceFallbackService.convertKoreanCode(query);
             for (String ticker : tickers) {
                 try {
@@ -262,7 +301,8 @@ public class StockSearchService {
             }
         }
         
-        return results;
+        log.info("Total Korean stocks found: {}", results.size());
+        return results.stream().limit(10).collect(Collectors.toList());
     }
     
     /**

@@ -42,6 +42,9 @@ const EnhancedCharts = () => {
         console.log('[EnhancedCharts] 📊 Loaded optimization data from localStorage:', parsed);
         
         // 데이터 구조 검증 및 디버깅
+        const originalWeightsSum = parsed.original?.weights?.reduce((sum, w) => sum + w, 0) || 0;
+        const optimizedWeightsSum = parsed.optimized?.weights?.reduce((sum, w) => sum + w, 0) || 0;
+        
         console.log('[EnhancedCharts] 🔍 Data structure validation:', {
           hasOriginal: !!parsed.original,
           hasOptimized: !!parsed.optimized,
@@ -50,13 +53,60 @@ const EnhancedCharts = () => {
           optimizedTickers: (parsed.optimized?.tickers || parsed.optimized?.selected_tickers)?.length || 0,
           originalWeights: parsed.original?.weights?.length || 0,
           optimizedWeights: parsed.optimized?.weights?.length || 0,
+          originalWeightsSum: originalWeightsSum.toFixed(4),
+          optimizedWeightsSum: optimizedWeightsSum.toFixed(4),
           originalExpectedReturn: parsed.original?.expected_return,
           optimizedExpectedReturn: parsed.optimized?.expected_return,
           originalRisk: parsed.original?.risk,
           optimizedRisk: parsed.optimized?.risk,
           originalSharpe: parsed.original?.sharpe_ratio,
-          optimizedSharpe: parsed.optimized?.sharpe_ratio
+          optimizedSharpe: parsed.optimized?.sharpe_ratio,
+          improvement: parsed.improvement
         });
+        
+        // 데이터 일치성 검증
+        if (parsed.original?.tickers?.length !== parsed.original?.weights?.length) {
+          console.warn('[EnhancedCharts] ⚠️ Original tickers and weights count mismatch');
+        }
+        if (parsed.optimized?.tickers?.length !== parsed.optimized?.weights?.length) {
+          console.warn('[EnhancedCharts] ⚠️ Optimized tickers and weights count mismatch');
+        }
+        if (Math.abs(originalWeightsSum - 1.0) > 0.01) {
+          console.warn('[EnhancedCharts] ⚠️ Original weights sum is not 1.0:', originalWeightsSum);
+        }
+        if (Math.abs(optimizedWeightsSum - 1.0) > 0.01) {
+          console.warn('[EnhancedCharts] ⚠️ Optimized weights sum is not 1.0:', optimizedWeightsSum);
+        }
+        
+        // 백엔드 계산값과 프론트엔드 표시값 일치성 검증
+        if (parsed.improvement) {
+          const calculatedReturnImprovement = parsed.original?.expected_return && parsed.optimized?.expected_return
+            ? ((parsed.optimized.expected_return - parsed.original.expected_return) / Math.abs(parsed.original.expected_return || 1)) * 100
+            : 0;
+          const calculatedRiskChange = parsed.original?.risk && parsed.optimized?.risk
+            ? ((parsed.optimized.risk - parsed.original.risk) / Math.abs(parsed.original.risk || 1)) * 100
+            : 0;
+          const calculatedSharpeImprovement = parsed.original?.sharpe_ratio && parsed.optimized?.sharpe_ratio
+            ? ((parsed.optimized.sharpe_ratio - parsed.original.sharpe_ratio) / Math.abs(parsed.original.sharpe_ratio || 1)) * 100
+            : 0;
+          
+          console.log('[EnhancedCharts] 📊 Improvement values comparison:', {
+            backendReturnImprovement: parsed.improvement.return_improvement,
+            calculatedReturnImprovement: calculatedReturnImprovement.toFixed(2),
+            backendRiskChange: parsed.improvement.risk_change,
+            calculatedRiskChange: calculatedRiskChange.toFixed(2),
+            backendSharpeImprovement: parsed.improvement.sharpe_improvement,
+            calculatedSharpeImprovement: calculatedSharpeImprovement.toFixed(2)
+          });
+          
+          // 백엔드 값과 계산값이 크게 다르면 경고
+          if (Math.abs(parsed.improvement.return_improvement - calculatedReturnImprovement) > 0.1) {
+            console.warn('[EnhancedCharts] ⚠️ Return improvement mismatch:', {
+              backend: parsed.improvement.return_improvement,
+              calculated: calculatedReturnImprovement
+            });
+          }
+        }
         
         setOptimizationData(parsed);
         setHasData(true);
@@ -176,7 +226,7 @@ const EnhancedCharts = () => {
               <div className="mt-3 pt-3 border-t border-green-400">
                 <span className="text-xs opacity-75">{t('improvement')}: </span>
                 <span className="text-lg font-bold">
-                  +{safeFormat(improvement.return_improvement, 4).toFixed(2)}%
+                  {safeFormat(improvement.return_improvement, 4) >= 0 ? '+' : ''}{safeFormat(improvement.return_improvement, 4).toFixed(2)}%
                 </span>
               </div>
             )}
@@ -218,7 +268,7 @@ const EnhancedCharts = () => {
               <div className="mt-3 pt-3 border-t border-purple-400">
                 <span className="text-xs opacity-75">{t('improvement')}: </span>
                 <span className="text-lg font-bold">
-                  +{safeFormat(improvement.sharpe_improvement, 4).toFixed(3)}
+                  {safeFormat(improvement.sharpe_improvement, 4) >= 0 ? '+' : ''}{safeFormat(improvement.sharpe_improvement, 4).toFixed(2)}%
                 </span>
               </div>
             )}
@@ -359,7 +409,7 @@ const EnhancedCharts = () => {
                 <div className="text-2xl mb-1">⭐</div>
                 <div className="text-xs text-gray-600 mb-1">{t('returnImprovement')}</div>
                 <div className="text-lg font-bold text-green-600">
-                  +{improvement.return_improvement?.toFixed(2) || '0.00'}%
+                  {improvement.return_improvement >= 0 ? '+' : ''}{improvement.return_improvement?.toFixed(2) || '0.00'}%
                 </div>
               </div>
               <div className="text-center p-4 bg-orange-50 rounded-lg">
@@ -373,14 +423,14 @@ const EnhancedCharts = () => {
                 <div className="text-2xl mb-1">📈</div>
                 <div className="text-xs text-gray-600 mb-1">{t('sharpeImprovement')}</div>
                 <div className="text-lg font-bold text-purple-600">
-                  +{improvement.sharpe_improvement?.toFixed(3) || '0.000'}
+                  {improvement.sharpe_improvement >= 0 ? '+' : ''}{improvement.sharpe_improvement?.toFixed(2) || '0.00'}%
                 </div>
               </div>
               <div className="text-center p-4 bg-indigo-50 rounded-lg">
                 <div className="text-2xl mb-1">🎯</div>
                 <div className="text-xs text-gray-600 mb-1">{t('overallScore')}</div>
                 <div className="text-lg font-bold text-indigo-600">
-                  +{improvement.score_improvement?.toFixed(2) || '0.00'}%
+                  {improvement.score_improvement >= 0 ? '+' : ''}{improvement.score_improvement?.toFixed(2) || '0.00'}%
                 </div>
               </div>
             </div>
@@ -530,7 +580,7 @@ const EnhancedCharts = () => {
                 <div className="bg-white rounded-lg p-4">
                   <div className="text-sm text-gray-600 mb-1">{language === 'ko' ? '수익률 개선' : 'Return Improvement'}</div>
                   <div className="text-2xl font-bold text-green-600">
-                    +{improvement.return_improvement?.toFixed(2) || '0.00'}%
+                    {improvement.return_improvement >= 0 ? '+' : ''}{improvement.return_improvement?.toFixed(2) || '0.00'}%
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
                     {language === 'ko' ? '기존 대비 증가' : 'vs Original'}
@@ -550,7 +600,7 @@ const EnhancedCharts = () => {
                 <div className="bg-white rounded-lg p-4">
                   <div className="text-sm text-gray-600 mb-1">{language === 'ko' ? '샤프 비율 개선' : 'Sharpe Improvement'}</div>
                   <div className="text-2xl font-bold text-purple-600">
-                    +{improvement.sharpe_improvement?.toFixed(3) || '0.000'}
+                    {improvement.sharpe_improvement >= 0 ? '+' : ''}{improvement.sharpe_improvement?.toFixed(2) || '0.00'}%
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
                     {language === 'ko' ? '위험 대비 수익 개선' : 'Risk-Adjusted Return'}

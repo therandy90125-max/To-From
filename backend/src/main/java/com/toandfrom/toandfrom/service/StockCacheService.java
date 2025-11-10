@@ -18,8 +18,11 @@ import java.util.stream.Collectors;
 /**
  * 주식 캐시 서비스
  * 메모리 및 DB 캐시를 관리하는 서비스
+ * 
+ * Note: StockDataInitializer가 먼저 실행되어 DB에 데이터를 로드한 후 캐시를 초기화합니다.
  */
 @Service
+@org.springframework.context.annotation.DependsOn("stockDataInitializer")
 public class StockCacheService {
     
     private static final Logger log = LoggerFactory.getLogger(StockCacheService.class);
@@ -161,14 +164,28 @@ public class StockCacheService {
     
     /**
      * 캐시 초기화 (시작 시)
+     * StockDataInitializer가 DB에 데이터를 로드한 후 실행됩니다.
      */
     @PostConstruct
     @Transactional(readOnly = true)
     public void initializeCache() {
         log.info("Initializing stock cache from database...");
+        
+        // 약간의 지연을 두어 StockDataInitializer가 완료되도록 보장
+        try {
+            Thread.sleep(2000); // 2초 대기
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
         loadFromDatabase();
         log.info("Stock cache initialized. KR: {} stocks, US: {} stocks", 
                  koreanStocksCache.size(), usStocksCache.size());
+        
+        // 캐시가 비어있으면 경고
+        if (koreanStocksCache.isEmpty() && usStocksCache.isEmpty()) {
+            log.warn("⚠️ Stock cache is empty! Check if StockDataInitializer ran successfully.");
+        }
     }
     
     /**
