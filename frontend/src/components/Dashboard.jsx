@@ -4,6 +4,7 @@ import { getCurrencySymbol, getCurrencyCode } from '../utils/currencyUtils';
 import StockSearchInput from './StockSearchInput';
 import CurrencyDisplay from './CurrencyDisplay';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { DollarSign, TrendingUp, Activity, Target } from 'lucide-react';
 import axios from 'axios';
 
 const COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA'];
@@ -543,31 +544,88 @@ const Dashboard = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="summary-grid">
-            <div className="summary-card-modern border-blue">
-              <span>{t('totalPortfolioValue')}</span>
-              <strong>
-                {currencySymbol}
-                {totalValue.toLocaleString()}
-              </strong>
-              <small>{currencyCode}</small>
+          {/* 🎯 Statistics Cards with Icons (Enhanced from Stock-Portfolio-Optimizer) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Total Portfolio Value */}
+            <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-blue-100 text-blue-600 p-3 rounded-lg">
+                  <DollarSign size={24} />
+                </div>
+                {totalCost > 0 && (
+                  <span className={`text-sm font-medium ${
+                    totalReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {totalReturn >= 0 ? '+' : ''}{returnPercentage.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-600 text-sm mb-1">{t('totalPortfolioValue')}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {currencySymbol}{totalValue.toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">{currencyCode}</p>
             </div>
-            <div className="summary-card-modern border-green">
-              <span>{t('totalReturn')}</span>
-              <strong className={totalReturn >= 0 ? 'positive' : 'negative'}>
-                {totalReturn >= 0 ? '+' : ''}
-                {currencySymbol}
-                {totalReturn.toLocaleString()}
-              </strong>
-              <small className={totalReturn >= 0 ? 'positive' : 'negative'}>
-                {returnPercentage >= 0 ? '+' : ''}
-                {returnPercentage.toFixed(2)}%
-              </small>
+
+            {/* Total Return */}
+            <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`${totalReturn >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} p-3 rounded-lg`}>
+                  <TrendingUp size={24} />
+                </div>
+                {totalCost > 0 && (
+                  <span className="text-sm font-medium text-gray-600">
+                    {language === 'ko' ? '투자 대비' : 'vs Cost'}
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-600 text-sm mb-1">{t('totalReturn')}</p>
+              <p className={`text-2xl font-bold ${totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {totalReturn >= 0 ? '+' : ''}{currencySymbol}{Math.abs(totalReturn).toLocaleString()}
+              </p>
+              <p className={`text-xs font-medium mt-1 ${totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {totalReturn >= 0 ? '+' : ''}{returnPercentage.toFixed(2)}%
+              </p>
             </div>
-            <div className="summary-card-modern border-purple">
-              <span>{t('holdings')}</span>
-              <strong>{activeHoldingsCount}</strong>
-              <small>{t('stocks')}</small>
+
+            {/* Holdings Count */}
+            <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-purple-100 text-purple-600 p-3 rounded-lg">
+                  <Activity size={24} />
+                </div>
+                <span className="text-sm font-medium text-gray-600">
+                  {language === 'ko' ? '보유중' : 'Active'}
+                </span>
+              </div>
+              <p className="text-gray-600 text-sm mb-1">{t('holdings')}</p>
+              <p className="text-2xl font-bold text-gray-900">{activeHoldingsCount}</p>
+              <p className="text-xs text-gray-500 mt-1">{t('stocks')}</p>
+            </div>
+
+            {/* Diversity Score (Calculated based on holdings) */}
+            <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-orange-100 text-orange-600 p-3 rounded-lg">
+                  <Target size={24} />
+                </div>
+                <span className="text-sm font-medium text-gray-600">
+                  {language === 'ko' ? '포트폴리오' : 'Portfolio'}
+                </span>
+              </div>
+              <p className="text-gray-600 text-sm mb-1">
+                {language === 'ko' ? '다양성 점수' : 'Diversity Score'}
+              </p>
+              <p className="text-2xl font-bold text-gray-900">
+                {Math.min(10, Math.max(1, activeHoldingsCount * 2)).toFixed(1)}/10
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {activeHoldingsCount >= 5 
+                  ? (language === 'ko' ? '우수' : 'Excellent')
+                  : activeHoldingsCount >= 3
+                  ? (language === 'ko' ? '양호' : 'Good')
+                  : (language === 'ko' ? '증가 권장' : 'Add more')}
+              </p>
             </div>
           </div>
 

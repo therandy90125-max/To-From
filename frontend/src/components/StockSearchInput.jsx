@@ -4,8 +4,83 @@ import CurrencyDisplay from './CurrencyDisplay';
 
 /**
  * 주식 검색 입력 컴포넌트 (한국 + 미국 주식 지원)
- * Stock Search Input with Exchange Badges and Market Filter
+ * Stock Search Input with Local Database + API Fallback
+ * 
+ * Features:
+ * - Local database for 60 popular stocks (instant search)
+ * - API fallback for extended search (Alpha Vantage + yfinance)
+ * - Exchange badges and market filtering
  */
+
+// 🚀 Local Popular Stocks Database (60 stocks for instant search)
+const POPULAR_STOCKS = [
+  // 한국 주식 (20개)
+  { symbol: '005930.KS', ticker: '005930.KS', name: '삼성전자', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '000660.KS', ticker: '000660.KS', name: 'SK하이닉스', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '035420.KS', ticker: '035420.KS', name: 'NAVER', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '035720.KS', ticker: '035720.KS', name: '카카오', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '051910.KS', ticker: '051910.KS', name: 'LG화학', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '006400.KS', ticker: '006400.KS', name: '삼성SDI', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '207940.KS', ticker: '207940.KS', name: '삼성바이오로직스', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '005380.KS', ticker: '005380.KS', name: '현대차', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '000270.KS', ticker: '000270.KS', name: '기아', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '068270.KS', ticker: '068270.KS', name: '셀트리온', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '028260.KS', ticker: '028260.KS', name: '삼성물산', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '105560.KS', ticker: '105560.KS', name: 'KB금융', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '055550.KS', ticker: '055550.KS', name: '신한지주', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '086790.KS', ticker: '086790.KS', name: '하나금융지주', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '032830.KS', ticker: '032830.KS', name: '삼성생명', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '017670.KS', ticker: '017670.KS', name: 'SK텔레콤', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '030200.KS', ticker: '030200.KS', name: 'KT', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '009150.KS', ticker: '009150.KS', name: '삼성전기', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '000810.KS', ticker: '000810.KS', name: '삼성화재', market: 'KOSPI', exchange: 'KOSPI' },
+  { symbol: '036570.KS', ticker: '036570.KS', name: '엔씨소프트', market: 'KOSPI', exchange: 'KOSPI' },
+  
+  // 미국 주식 - 기술주 (20개)
+  { symbol: 'AAPL', ticker: 'AAPL', name: 'Apple Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'MSFT', ticker: 'MSFT', name: 'Microsoft Corporation', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'GOOGL', ticker: 'GOOGL', name: 'Alphabet Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'AMZN', ticker: 'AMZN', name: 'Amazon.com Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'TSLA', ticker: 'TSLA', name: 'Tesla Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'NVDA', ticker: 'NVDA', name: 'NVIDIA Corporation', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'META', ticker: 'META', name: 'Meta Platforms Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'NFLX', ticker: 'NFLX', name: 'Netflix Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'INTC', ticker: 'INTC', name: 'Intel Corporation', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'AMD', ticker: 'AMD', name: 'Advanced Micro Devices', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'ADBE', ticker: 'ADBE', name: 'Adobe Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'CSCO', ticker: 'CSCO', name: 'Cisco Systems', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'AVGO', ticker: 'AVGO', name: 'Broadcom Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'ORCL', ticker: 'ORCL', name: 'Oracle Corporation', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'CRM', ticker: 'CRM', name: 'Salesforce Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'QCOM', ticker: 'QCOM', name: 'Qualcomm Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'TXN', ticker: 'TXN', name: 'Texas Instruments', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'PYPL', ticker: 'PYPL', name: 'PayPal Holdings', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'UBER', ticker: 'UBER', name: 'Uber Technologies', market: 'NASDAQ', exchange: 'NASDAQ' },
+  { symbol: 'SHOP', ticker: 'SHOP', name: 'Shopify Inc.', market: 'NASDAQ', exchange: 'NASDAQ' },
+  
+  // 미국 주식 - 금융/산업 (20개)
+  { symbol: 'BRK.B', ticker: 'BRK.B', name: 'Berkshire Hathaway', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'JPM', ticker: 'JPM', name: 'JPMorgan Chase & Co.', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'V', ticker: 'V', name: 'Visa Inc.', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'MA', ticker: 'MA', name: 'Mastercard', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'WMT', ticker: 'WMT', name: 'Walmart Inc.', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'JNJ', ticker: 'JNJ', name: 'Johnson & Johnson', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'PG', ticker: 'PG', name: 'Procter & Gamble', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'DIS', ticker: 'DIS', name: 'Walt Disney Company', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'BAC', ticker: 'BAC', name: 'Bank of America', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'XOM', ticker: 'XOM', name: 'Exxon Mobil', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'CVX', ticker: 'CVX', name: 'Chevron Corporation', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'KO', ticker: 'KO', name: 'Coca-Cola Company', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'PEP', ticker: 'PEP', name: 'PepsiCo Inc.', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'MCD', ticker: 'MCD', name: "McDonald's Corporation", market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'NKE', ticker: 'NKE', name: 'Nike Inc.', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'HD', ticker: 'HD', name: 'Home Depot', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'UNH', ticker: 'UNH', name: 'UnitedHealth Group', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'GS', ticker: 'GS', name: 'Goldman Sachs', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'MS', ticker: 'MS', name: 'Morgan Stanley', market: 'NYSE', exchange: 'NYSE' },
+  { symbol: 'BA', ticker: 'BA', name: 'Boeing Company', market: 'NYSE', exchange: 'NYSE' },
+];
+
 const StockSearchInput = ({ onSelectStock, placeholder = "Search stocks...", className = "" }) => {
   const [query, setQuery] = useState('');
   const [market, setMarket] = useState('ALL'); // 'ALL', 'KR', 'US'
@@ -13,6 +88,7 @@ const StockSearchInput = ({ onSelectStock, placeholder = "Search stocks...", cla
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchSource, setSearchSource] = useState('local'); // 'local' or 'api'
   const dropdownRef = useRef(null);
 
   // Helper function for highlighting
@@ -58,29 +134,72 @@ const StockSearchInput = ({ onSelectStock, placeholder = "Search stocks...", cla
     }
   };
 
-  // Search stocks with market filter
+  // 🚀 Search local database first (instant), then fallback to API
+  const searchLocalDatabase = (searchQuery, marketFilter) => {
+    const query = searchQuery.toLowerCase().trim();
+    
+    return POPULAR_STOCKS.filter(stock => {
+      // Market filter
+      if (marketFilter === 'KR' && !['KOSPI', 'KOSDAQ', 'KRX'].includes(stock.market)) {
+        return false;
+      }
+      if (marketFilter === 'US' && !['NASDAQ', 'NYSE'].includes(stock.market)) {
+        return false;
+      }
+      
+      // Text search (symbol or name)
+      const symbolMatch = stock.symbol.toLowerCase().includes(query) || 
+                         stock.ticker.toLowerCase().includes(query);
+      const nameMatch = stock.name.toLowerCase().includes(query);
+      
+      return symbolMatch || nameMatch;
+    });
+  };
+
+  // Search stocks with hybrid approach: Local DB → API
   const performSearch = async (searchQuery, marketFilter) => {
     if (!searchQuery || searchQuery.trim().length < 1) {
       setResults([]);
       setError(null);
       setLoading(false);
+      setSearchSource('local');
       return;
     }
 
-    // 이미 로딩 상태이므로 setLoading(true) 제거
     setError(null);
 
     try {
+      // 1️⃣ Search local database first (instant response)
+      const localResults = searchLocalDatabase(searchQuery, marketFilter);
+      
+      if (localResults.length > 0) {
+        // ✅ Found in local database - instant response!
+        console.log(`[StockSearch] ⚡ Found ${localResults.length} results in local database`);
+        setResults(localResults);
+        setSearchSource('local');
+        setShowDropdown(true);
+        setLoading(false);
+        return;
+      }
+      
+      // 2️⃣ Not found locally - fallback to API (Alpha Vantage + yfinance)
+      console.log('[StockSearch] 🌐 Not found locally, searching API...');
+      setSearchSource('api');
+      
       const searchResults = await searchStocks(searchQuery, marketFilter);
       setResults(searchResults || []);
-      // 결과가 있으면 드롭다운 표시
+      
       if (searchResults && searchResults.length > 0) {
+        console.log(`[StockSearch] ✅ Found ${searchResults.length} results from API`);
         setShowDropdown(true);
+      } else {
+        console.log('[StockSearch] ❌ No results from API');
       }
     } catch (err) {
       console.error('Stock search error:', err);
       setResults([]);
       setError(err.message || '검색에 실패했습니다. 다시 시도하세요.');
+      setSearchSource('api');
     } finally {
       setLoading(false);
     }
@@ -276,6 +395,15 @@ const StockSearchInput = ({ onSelectStock, placeholder = "Search stocks...", cla
       {showDropdown && !loading && !error && results.length > 0 && (
         <div className="absolute z-30 w-full mt-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 
                         rounded-md shadow-md max-h-40 overflow-y-auto">
+            {/* Search Source Indicator */}
+            <div className={`px-2 py-1 text-xs font-medium ${
+              searchSource === 'local' 
+                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' 
+                : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+            }`}>
+              {searchSource === 'local' ? '⚡ 즉시 검색 (인기 종목)' : '🌐 API 검색 (전체)'}
+            </div>
+            
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {/* 한국 주식 섹션 */}
               {korean.length > 0 && (
