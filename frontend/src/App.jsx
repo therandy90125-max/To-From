@@ -8,6 +8,7 @@ import Settings from './components/Settings';
 import EnhancedCharts from './components/EnhancedCharts';
 import Insights from './components/Insights';
 import ChatDock from './components/ChatDock';
+import ExchangeRateWidget from './components/ExchangeRateWidget';
 import './App.css';
 import './styles/About.css';
 
