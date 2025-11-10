@@ -1,5 +1,6 @@
 import BackgroundMusic from "./BackgroundMusic";
 import ExchangeRateWidget from "./ExchangeRateWidget";
+import TechStackBadges from "./TechStackBadges";
 import { useLanguage } from "../contexts/LanguageContext";
 
 export default function Sidebar({ currentPage, onPageChange, onLanguageChange }) {
@@ -48,6 +49,11 @@ export default function Sidebar({ currentPage, onPageChange, onLanguageChange })
         {/* 환율 위젯 */}
         <div style={{ marginBottom: '1rem' }}>
           <ExchangeRateWidget />
+        </div>
+        
+        {/* 기술 스택 배지 */}
+        <div style={{ marginBottom: '1rem' }}>
+          <TechStackBadges />
         </div>
         
         <BackgroundMusic />

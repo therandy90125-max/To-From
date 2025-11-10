@@ -9,6 +9,7 @@ import EnhancedCharts from './components/EnhancedCharts';
 import Insights from './components/Insights';
 import ChatDock from './components/ChatDock';
 import ExchangeRateWidget from './components/ExchangeRateWidget';
+import TechStackBadges from './components/TechStackBadges';
 import './App.css';
 import './styles/About.css';
 
